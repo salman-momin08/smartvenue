@@ -1,0 +1,347 @@
+/**
+ * SmartVenue — Map Renderer
+ * Renders venue zones on Google Maps with density-based color overlays.
+ * Falls back to a canvas-based renderer when Google Maps API is unavailable.
+ */
+
+import { ZoneData, DensityCategory, LatLng, Incident, VenueConfig } from '../types.js';
+
+declare const google: any;
+
+// ── Density Colors ──────────────────────────────────────────────────
+const DENSITY_COLORS: Record<DensityCategory, { fill: string; stroke: string; glow: string }> = {
+  LOW: { fill: 'rgba(16, 185, 129, 0.35)', stroke: '#10b981', glow: '#10b98140' },
+  MEDIUM: { fill: 'rgba(245, 158, 11, 0.35)', stroke: '#f59e0b', glow: '#f59e0b40' },
+  HIGH: { fill: 'rgba(239, 68, 68, 0.35)', stroke: '#ef4444', glow: '#ef444440' },
+  CRITICAL: { fill: 'rgba(220, 38, 38, 0.55)', stroke: '#ff0000', glow: '#ff000060' },
+};
+
+const ZONE_ICONS: Record<string, string> = {
+  gate: '🚪', restroom: '🚻', food: '🍔', seating: '💺', exit: '🚨',
+};
+
+// ── Google Maps Renderer ────────────────────────────────────────────
+let map: any = null;
+const polygons = new Map<string, any>();
+const markers = new Map<string, any>();
+const infoWindows = new Map<string, any>();
+
+export function initGoogleMap(container: HTMLElement, config: VenueConfig): boolean {
+  try {
+    if (typeof google === 'undefined' || !google.maps) {
+      console.warn('[MapRenderer] Google Maps not available — using canvas fallback');
+      initCanvasMap(container, config);
+      return false;
+    }
+
+    map = new google.maps.Map(container, {
+      center: config.center, zoom: config.zoom,
+      mapTypeId: 'satellite',
+      styles: [
+        { elementType: 'geometry', stylers: [{ color: '#0a0e1a' }] },
+        { elementType: 'labels.text.fill', stylers: [{ color: '#8899aa' }] },
+        { elementType: 'labels.text.stroke', stylers: [{ color: '#0a0e1a' }] },
+        { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1a2332' }] },
+        { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0d1b2a' }] },
+      ],
+      disableDefaultUI: true,
+      zoomControl: true,
+      mapTypeControl: false,
+    });
+
+    for (const zone of config.zones) {
+      createZonePolygon(zone);
+      createZoneMarker(zone);
+    }
+    return true;
+  } catch (err) {
+    console.warn('[MapRenderer] Google Maps init failed:', err);
+    initCanvasMap(container, config);
+    return false;
+  }
+}
+
+function createZonePolygon(zone: ZoneData): void {
+  if (!map) return;
+  const colors = DENSITY_COLORS[zone.densityCategory];
+  const polygon = new google.maps.Polygon({
+    paths: zone.polygon, map,
+    fillColor: colors.fill, fillOpacity: 0.6,
+    strokeColor: colors.stroke, strokeWeight: 2,
+  });
+  polygon.addListener('click', () => showZoneInfo(zone));
+  polygons.set(zone.zoneId, polygon);
+}
+
+function createZoneMarker(zone: ZoneData): void {
+  if (!map) return;
+  const marker = new google.maps.Marker({
+    position: zone.center, map,
+    label: { text: ZONE_ICONS[zone.type] || '📍', fontSize: '18px' },
+    title: zone.name,
+  });
+  const iw = new google.maps.InfoWindow({
+    content: buildInfoContent(zone),
+  });
+  marker.addListener('click', () => {
+    infoWindows.forEach(w => w.close());
+    iw.open(map, marker);
+  });
+  markers.set(zone.zoneId, marker);
+  infoWindows.set(zone.zoneId, iw);
+}
+
+function showZoneInfo(zone: ZoneData): void {
+  const iw = infoWindows.get(zone.zoneId);
+  const marker = markers.get(zone.zoneId);
+  if (iw && marker) {
+    infoWindows.forEach(w => w.close());
+    iw.setContent(buildInfoContent(zone));
+    iw.open(map, marker);
+  }
+}
+
+function buildInfoContent(zone: ZoneData): string {
+  const colors = DENSITY_COLORS[zone.densityCategory];
+  return `<div style="color:#111;font-family:Inter,sans-serif;padding:4px">
+    <strong>${zone.name}</strong><br/>
+    <span style="color:${colors.stroke}">● ${zone.densityCategory}</span> — ${Math.round(zone.densityScore)}%<br/>
+    Occupancy: ${zone.currentOccupancy}/${zone.capacity}<br/>
+    Status: ${zone.isOpen ? '✅ Open' : '🚫 Closed'}
+  </div>`;
+}
+
+// ── Update Zone on Map ──────────────────────────────────────────────
+export function updateZoneOnMap(zone: ZoneData): void {
+  if (map && polygons.has(zone.zoneId)) {
+    const colors = DENSITY_COLORS[zone.densityCategory];
+    const poly = polygons.get(zone.zoneId);
+    poly.setOptions({ fillColor: colors.fill, strokeColor: colors.stroke });
+    const iw = infoWindows.get(zone.zoneId);
+    if (iw) iw.setContent(buildInfoContent(zone));
+  }
+  if (canvasCtx) updateCanvasZone(zone);
+}
+
+export function updateAllZones(zones: Map<string, ZoneData>): void {
+  for (const zone of zones.values()) {
+    updateZoneOnMap(zone);
+  }
+  if (canvasCtx) renderCanvas(zones);
+}
+
+// ── Highlight Emergency Exits ───────────────────────────────────────
+export function highlightEmergencyExits(zones: Map<string, ZoneData>, active: boolean): void {
+  for (const zone of zones.values()) {
+    if (zone.type === 'exit') {
+      if (map && polygons.has(zone.zoneId)) {
+        const poly = polygons.get(zone.zoneId);
+        poly.setOptions({
+          fillColor: active ? 'rgba(16,185,129,0.6)' : DENSITY_COLORS[zone.densityCategory].fill,
+          strokeColor: active ? '#10b981' : DENSITY_COLORS[zone.densityCategory].stroke,
+          strokeWeight: active ? 4 : 2,
+        });
+      }
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// CANVAS FALLBACK RENDERER (when Google Maps is unavailable)
+// ════════════════════════════════════════════════════════════════════
+
+let canvasCtx: CanvasRenderingContext2D | null = null;
+let canvasEl: HTMLCanvasElement | null = null;
+let canvasConfig: VenueConfig | null = null;
+let canvasZones: Map<string, ZoneData> = new Map();
+let tooltipEl: HTMLDivElement | null = null;
+let hoveredZone: string | null = null;
+
+function initCanvasMap(container: HTMLElement, config: VenueConfig): void {
+  container.innerHTML = '';
+  container.style.position = 'relative';
+  canvasEl = document.createElement('canvas');
+  canvasEl.id = 'venue-canvas';
+  canvasEl.style.width = '100%';
+  canvasEl.style.height = '100%';
+  canvasEl.style.borderRadius = '12px';
+  container.appendChild(canvasEl);
+
+  // Tooltip
+  tooltipEl = document.createElement('div');
+  tooltipEl.className = 'canvas-tooltip';
+  tooltipEl.style.cssText = 'position:absolute;display:none;background:rgba(10,14,26,0.95);color:#f9fafb;padding:10px 14px;border-radius:8px;font-size:13px;pointer-events:none;border:1px solid rgba(255,255,255,0.15);backdrop-filter:blur(10px);z-index:10;max-width:220px;';
+  container.appendChild(tooltipEl);
+
+  canvasConfig = config;
+  const zones = new Map<string, ZoneData>();
+  config.zones.forEach(z => zones.set(z.zoneId, z));
+  canvasZones = zones;
+
+  const resizeObserver = new ResizeObserver(() => {
+    if (!canvasEl) return;
+    canvasEl.width = canvasEl.clientWidth * window.devicePixelRatio;
+    canvasEl.height = canvasEl.clientHeight * window.devicePixelRatio;
+    canvasCtx = canvasEl.getContext('2d');
+    if (canvasCtx) {
+      canvasCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+      renderCanvas(canvasZones);
+    }
+  });
+  resizeObserver.observe(canvasEl);
+
+  canvasEl.addEventListener('mousemove', (e) => handleCanvasHover(e));
+  canvasEl.addEventListener('mouseleave', () => { if (tooltipEl) tooltipEl.style.display = 'none'; hoveredZone = null; });
+}
+
+function latLngToCanvas(pos: LatLng, w: number, h: number): { x: number; y: number } {
+  if (!canvasConfig) return { x: 0, y: 0 };
+  const c = canvasConfig.center;
+  const scale = Math.min(w, h) / 0.014;
+  return {
+    x: w / 2 + (pos.lng - c.lng) * scale,
+    y: h / 2 - (pos.lat - c.lat) * scale,
+  };
+}
+
+function renderCanvas(zones: Map<string, ZoneData>): void {
+  if (!canvasCtx || !canvasEl) return;
+  const ctx = canvasCtx;
+  const w = canvasEl.clientWidth;
+  const h = canvasEl.clientHeight;
+
+  // Background
+  ctx.fillStyle = '#0a0e1a';
+  ctx.fillRect(0, 0, w, h);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < w; i += 30) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, h); ctx.stroke(); }
+  for (let i = 0; i < h; i += 30) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(w, i); ctx.stroke(); }
+
+  // Hall outline (rectangle)
+  ctx.beginPath();
+  ctx.rect(w * 0.1, h * 0.1, w * 0.8, h * 0.8);
+  ctx.strokeStyle = 'rgba(59,130,246,0.2)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Main Exhibition Floor
+  ctx.beginPath();
+  ctx.rect(w * 0.25, h * 0.25, w * 0.5, h * 0.5);
+  ctx.fillStyle = 'rgba(59,130,246,0.05)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(59,130,246,0.15)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Zones
+  for (const zone of zones.values()) {
+    drawCanvasZone(ctx, zone, w, h);
+  }
+
+  // Title
+  ctx.font = '600 14px Inter, system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.textAlign = 'left';
+  ctx.fillText('SmartVenue Exhibition Hall — Live Density Map', 16, 28);
+
+  // Legend
+  drawLegend(ctx, w, h);
+
+  canvasZones = zones;
+}
+
+function drawCanvasZone(ctx: CanvasRenderingContext2D, zone: ZoneData, w: number, h: number): void {
+  const colors = DENSITY_COLORS[zone.densityCategory];
+  const center = latLngToCanvas(zone.center, w, h);
+  const radius = zone.type === 'seating' ? 28 : zone.type === 'gate' ? 22 : 18;
+  const isHovered = hoveredZone === zone.zoneId;
+
+  // Glow
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, radius + (isHovered ? 8 : 4), 0, Math.PI * 2);
+  const glow = ctx.createRadialGradient(center.x, center.y, radius * 0.5, center.x, center.y, radius + 10);
+  glow.addColorStop(0, colors.glow);
+  glow.addColorStop(1, 'transparent');
+  ctx.fillStyle = glow;
+  ctx.fill();
+
+  // Hexagon
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 3) * i - Math.PI / 2;
+    const px = center.x + radius * Math.cos(angle);
+    const py = center.y + radius * Math.sin(angle);
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = colors.fill;
+  ctx.fill();
+  ctx.strokeStyle = isHovered ? '#fff' : colors.stroke;
+  ctx.lineWidth = isHovered ? 2.5 : 1.5;
+  ctx.stroke();
+
+  // Icon
+  ctx.font = '14px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(ZONE_ICONS[zone.type] || '📍', center.x, center.y - 2);
+
+  // Density %
+  ctx.font = '600 9px Inter, system-ui, sans-serif';
+  ctx.fillStyle = '#f9fafb';
+  ctx.fillText(`${Math.round(zone.densityScore)}%`, center.x, center.y + 12);
+}
+
+function drawLegend(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  const items: [string, DensityCategory][] = [['Low', 'LOW'], ['Medium', 'MEDIUM'], ['High', 'HIGH'], ['Critical', 'CRITICAL']];
+  const y = h - 20;
+  ctx.font = '500 11px Inter, system-ui, sans-serif';
+  ctx.textAlign = 'left';
+  let x = 16;
+  for (const [label, cat] of items) {
+    const c = DENSITY_COLORS[cat];
+    ctx.fillStyle = c.stroke;
+    ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillText(label, x + 10, y + 4);
+    x += ctx.measureText(label).width + 28;
+  }
+}
+
+function handleCanvasHover(e: MouseEvent): void {
+  if (!canvasEl || !canvasConfig || !tooltipEl) return;
+  const rect = canvasEl.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const w = canvasEl.clientWidth;
+  const h = canvasEl.clientHeight;
+
+  let found = false;
+  for (const zone of canvasZones.values()) {
+    const pos = latLngToCanvas(zone.center, w, h);
+    const radius = zone.type === 'seating' ? 28 : zone.type === 'gate' ? 22 : 18;
+    const dist = Math.sqrt((mx - pos.x) ** 2 + (my - pos.y) ** 2);
+    if (dist <= radius + 5) {
+      hoveredZone = zone.zoneId;
+      tooltipEl.innerHTML = `<strong>${zone.name}</strong><br/>Density: <span style="color:${DENSITY_COLORS[zone.densityCategory].stroke}">${zone.densityCategory}</span> (${Math.round(zone.densityScore)}%)<br/>Occupancy: ${zone.currentOccupancy}/${zone.capacity}<br/>Status: ${zone.isOpen ? '✅ Open' : '🚫 Closed'}`;
+      tooltipEl.style.display = 'block';
+      tooltipEl.style.left = `${mx + 15}px`;
+      tooltipEl.style.top = `${my - 10}px`;
+      found = true;
+      renderCanvas(canvasZones);
+      break;
+    }
+  }
+  if (!found && hoveredZone) {
+    hoveredZone = null;
+    tooltipEl.style.display = 'none';
+    renderCanvas(canvasZones);
+  }
+}
+
+function updateCanvasZone(zone: ZoneData): void {
+  canvasZones.set(zone.zoneId, zone);
+}

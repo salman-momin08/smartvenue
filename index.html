@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="SmartVenue Assistant — AI-powered crowd intelligence for sporting venues. Real-time routing, queue predictions, and emergency guidance." />
+  <meta name="theme-color" content="#06080f" />
+  <title>SmartVenue Assistant — Intelligent Venue Navigation</title>
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles/main.css?v=2" />
+
+  <!-- Google Maps API (CDN) — Replace YOUR_API_KEY or remove for simulation mode -->
+  <!-- <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=visualization" defer></script> -->
+
+  <!-- Firebase SDKs (CDN) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+  <!-- Dynamically injected config during build -->
+  <script src="firebase-config.js"></script>
+</head>
+<body>
+  <!-- Skip Link for Accessibility -->
+  <a href="#map-container" class="skip-link" id="skip-link" 
+     style="position:absolute;top:-40px;left:0;padding:8px 16px;background:var(--accent-blue);color:#fff;z-index:9999;font-size:14px;border-radius:0 0 8px 0;transition:top 0.2s;"
+     onfocus="this.style.top='0'" onblur="this.style.top='-40px'">
+    Skip to Map
+  </a>
+
+  <div class="app-layout">
+    <!-- Top Toolbar -->
+    <header class="toolbar" id="toolbar" role="banner" aria-label="Application toolbar">
+      <!-- Rendered by panelRenderer.ts -->
+    </header>
+
+    <!-- Emergency Banner -->
+    <div class="emergency-banner" id="emergency-banner" role="alert" aria-live="assertive" style="display: none;">
+      <!-- Rendered dynamically -->
+    </div>
+
+    <!-- Left Panel: Assistant Recommendations -->
+    <aside class="side-panel left-panel" id="left-panel" role="complementary" aria-label="Assistant recommendations">
+      <div class="panel-empty">
+        <div class="loader"></div>
+        <p>Initializing assistant…</p>
+      </div>
+    </aside>
+
+    <!-- Center: Venue Map -->
+    <main class="map-container" id="map-container" role="main" aria-label="Venue density map">
+      <!-- Google Maps or Canvas fallback rendered here -->
+    </main>
+
+    <!-- Right Panel: Queue Intelligence -->
+    <aside class="side-panel right-panel" id="right-panel" role="complementary" aria-label="Queue intelligence">
+      <div class="panel-empty">
+        <div class="loader"></div>
+        <p>Loading queue data…</p>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Main Application Script (ES Module) -->
+  <script type="module" src="dist/main.js?v=2"></script>
+</body>
+</html>
