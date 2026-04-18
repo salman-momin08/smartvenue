@@ -7,7 +7,7 @@ import {
   ZoneData, QueueState, Incident, FirestoreZoneDoc,
   FirestoreQueueDoc, FirestoreIncidentDoc, FirestoreRoutingDoc,
 } from '../types.js';
-import { sanitizeFirestoreDoc } from '../security/validation.js';
+import { sanitizeFirestoreDoc } from '../utils/validation.js';
 
 // Firebase types (loaded via CDN globals)
 declare const firebase: any;

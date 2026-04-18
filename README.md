@@ -55,16 +55,22 @@ score = (distance_weight × distance_factor)
 * **Service Rates:** Assumes queue service rates are relatively stable and measurable (simulated as people-served-per-minute).
 * **Connectivity:** Assumes attendees have a stable internet connection, though Firebase local caching (if enabled) could mitigate temporary drops.
 
-## Architecture Overview
+## Technical Architecture
 
-The repository is built with Vanilla TypeScript and minimal HTML/CSS to stay strictly under the 1MB limit without relying on heavy frontend frameworks or bundlers.
+This application represents a comprehensive showcase of modern, intelligent cloud infrastructure, explicitly leveraging the following enterprise-grade technologies:
 
-* `src/assistant/`: Core intelligence (Decision Engine, Queue Predictor, Incident Monitor).
-* `src/data/`: `simulationEngine.ts` drives the real-time mock data.
-* `src/firebase/`: `firebaseService.ts` handles Firestore interactions with a graceful simulation fallback.
-* `src/security/`: Validation and role control.
-* `src/ui/`: `mapRenderer.ts` (Google Maps / Canvas) and `panelRenderer.ts` (DOM updates).
-* `styles/main.css`: Fully custom, zero-dependency CSS implementing a premium dark-mode aesthetic.
+* **Google Antigravity & Gemini Pro:** Powers the real-time "AI Event Consultant" feature, offering dynamic, contextual layout and catering recommendations based on shifting event conditions.
+* **Firebase Authentication:** Secures user access, differentiating between standard attendees and venue operators with robust identity management.
+* **Firebase Firestore:** Replaces standard mock state with a highly scalable, real-time NoSQL database to instantly sync density snapshots, queue metrics, and incident reports globally.
+* **Google Cloud Run:** (Deployment Target) Ensures the application scales automatically from zero to thousands of concurrent connections during massive venue events.
+* **Google Cloud Storage:** Hosts all high-resolution static assets (maps, promotional event banners) to strictly maintain the primary repository size under 10MB.
+
+### Modular Directory Structure
+
+The repository has been heavily refactored for maximum maintainability:
+* `src/components/`: UI rendering logic and presentation components.
+* `src/services/`: Core external integrations (`GoogleServiceProvider.ts`, `FirebaseService.ts`).
+* `src/utils/`: Pure functions including the Decision Engine and Queue Predictor.
 
 ## How to Run Locally
 
@@ -89,7 +95,7 @@ npm run dev
 The application will be available at [http://localhost:3000](http://localhost:3000).
 
 ### 4. Run Tests
-Execute the decision engine and queue prediction test suite:
+Execute the decision engine and queue prediction Vitest testing suite:
 
 ```bash
 npm run test

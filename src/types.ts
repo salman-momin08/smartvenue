@@ -127,6 +127,7 @@ export interface AppState {
   userRole: UserRole;
   highContrastMode: boolean;
   userPosition: LatLng;
+  aiLoading: boolean;
 }
 
 // ── Firebase Document Shapes ────────────────────────────────────────

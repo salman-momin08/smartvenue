@@ -7,7 +7,7 @@ import {
   NavigationDecision, QueuePrediction, Incident, ZoneData,
   QueueState, DensityCategory, UserRole,
 } from '../types.js';
-import { formatPrediction } from '../assistant/queuePredictor.js';
+import { formatPrediction } from '../utils/queuePredictor.js';
 
 // ── Density Badge Colors ────────────────────────────────────────────
 const BADGE_CLASS: Record<DensityCategory, string> = {
@@ -213,24 +213,43 @@ export function renderEmergencyBanner(container: HTMLElement, active: boolean, m
 }
 
 // ── Render Toolbar ──────────────────────────────────────────────────
+/**
+ * Renders the application toolbar with action buttons.
+ * @param {HTMLElement} container The DOM element to render into
+ * @param {UserRole} role Current user role
+ * @param {boolean} highContrast High contrast mode active state
+ * @param {boolean} emergencyMode Emergency mode active state
+ * @param {boolean} aiLoading Loading state for the AI Consultant
+ * @param {Function} onToggleRole Callback to switch roles
+ * @param {Function} onToggleContrast Callback to toggle contrast
+ * @param {Function} onToggleEmergency Callback to toggle emergency mode
+ * @param {Function} onAIConsult Callback to invoke Gemini AI
+ */
 export function renderToolbar(
   container: HTMLElement,
   role: UserRole,
   highContrast: boolean,
   emergencyMode: boolean,
+  aiLoading: boolean,
   onToggleRole: () => void,
   onToggleContrast: () => void,
   onToggleEmergency: () => void,
+  onAIConsult: () => void,
 ): void {
   container.innerHTML = `
     <div class="toolbar-left">
       <div class="toolbar-brand">
+        <img src="https://storage.googleapis.com/smartvenue-assets/logo-hires.png" alt="SmartVenue Official Logo" width="24" height="24" style="border-radius:4px;" onerror="this.style.display='none'">
         <span class="brand-icon" aria-hidden="true">🏟️</span>
         <span class="brand-name">SmartVenue</span>
         <span class="brand-tag">Assistant</span>
       </div>
     </div>
     <div class="toolbar-right">
+      <button id="ai-consultant-btn" class="toolbar-btn ${aiLoading ? 'loading' : ''}" aria-label="Consult Gemini AI" ${aiLoading ? 'disabled' : ''}>
+        <span class="btn-icon">${aiLoading ? '⏳' : '✨'}</span>
+        <span class="btn-text">${aiLoading ? 'Thinking...' : 'AI Consultant'}</span>
+      </button>
       <button id="btn-role" class="toolbar-btn" aria-label="Switch role" title="Current: ${role}">
         <span class="btn-icon">${role === 'operator' ? '🔧' : '👤'}</span>
         <span class="btn-text">${role}</span>
@@ -252,4 +271,5 @@ export function renderToolbar(
   document.getElementById('btn-role')?.addEventListener('click', onToggleRole);
   document.getElementById('btn-contrast')?.addEventListener('click', onToggleContrast);
   document.getElementById('btn-emergency')?.addEventListener('click', onToggleEmergency);
+  document.getElementById('ai-consultant-btn')?.addEventListener('click', onAIConsult);
 }

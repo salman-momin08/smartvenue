@@ -5,9 +5,9 @@
  */
 
 import { ZoneData, QueueState, Incident, LatLng, ZoneType, VenueConfig } from '../types.js';
-import { classifyDensity } from '../assistant/decisionEngine.js';
-import { updateQueueHistory } from '../assistant/queuePredictor.js';
-import { writeZoneData, writeQueueData, writeIncident, isConnected } from '../firebase/firebaseService.js';
+import { classifyDensity } from '../utils/decisionEngine.js';
+import { updateQueueHistory } from '../utils/queuePredictor.js';
+import { writeZoneData, writeQueueData, writeIncident, isConnected } from '../services/firebaseService.js';
 
 // ── Stadium Center (Generic Venue Location) ─────────────────────────
 const VENUE_CENTER: LatLng = { lat: 40.4531, lng: -3.6884 }; // Madrid area

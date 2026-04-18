@@ -4,16 +4,25 @@
   "type": "module",
   "description": "Smart Venue Assistant — AI-driven attendee experience for large-scale sporting venues",
   "scripts": {
-    "build": "node generate-config.js && tsc",
-    "watch": "tsc --watch",
-    "serve": "npx -y serve@latest . -l 3000",
-    "dev": "node generate-config.js && concurrently \"tsc --watch\" \"npx -y serve@latest . -l 3000 --no-clipboard\"",
-    "test": "tsc && node dist/tests/testDecisionEngine.js"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "devDependencies": {
+    "concurrently": "^8.2.0",
     "typescript": "^5.4.0",
-    "concurrently": "^8.2.0"
+    "vite": "^8.0.8",
+    "vitest": "^4.1.4"
   },
-  "keywords": ["smart-venue", "google-maps", "firebase", "crowd-intelligence"],
-  "license": "MIT"
+  "keywords": [
+    "smart-venue",
+    "google-maps",
+    "firebase",
+    "crowd-intelligence"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1"
+  }
 }

@@ -4,15 +4,16 @@
  */
 
 import { AppState, UserRole, ZoneData, QueueState, Incident, LatLng } from './types.js';
-import { computeDecision } from './assistant/decisionEngine.js';
-import { predictAllQueues } from './assistant/queuePredictor.js';
-import { monitorIncidents, shouldActivateEmergency, triggerEmergency } from './assistant/incidentMonitor.js';
-import { createVenueConfig, createInitialQueues, startSimulation } from './data/simulationEngine.js';
-import { initGoogleMap, updateAllZones, highlightEmergencyExits } from './ui/mapRenderer.js';
-import { renderRecommendationsPanel, renderQueuePanel, renderEmergencyBanner, renderToolbar } from './ui/panelRenderer.js';
-import { initNotifications, notifyNewIncidents, notifyRouteChange } from './ui/notificationService.js';
-import { initFirebase, writeRoutingSuggestion, isConnected, writeIncident } from './firebase/firebaseService.js';
-import { hasPermission, validateRole } from './security/validation.js';
+import { computeDecision } from './utils/decisionEngine.js';
+import { predictAllQueues } from './utils/queuePredictor.js';
+import { monitorIncidents, shouldActivateEmergency, triggerEmergency } from './utils/incidentMonitor.js';
+import { createVenueConfig, createInitialQueues, startSimulation } from './services/simulationEngine.js';
+import { initGoogleMap, updateAllZones, highlightEmergencyExits } from './components/mapRenderer.js';
+import { renderRecommendationsPanel, renderQueuePanel, renderEmergencyBanner, renderToolbar } from './components/panelRenderer.js';
+import { initNotifications, notifyNewIncidents, notifyRouteChange } from './components/notificationService.js';
+import { initFirebase, writeRoutingSuggestion, isConnected, writeIncident } from './services/firebaseService.js';
+import { GoogleServiceProvider } from './services/GoogleServiceProvider.js';
+import { hasPermission, validateRole } from './utils/validation.js';
 
 // ── Application State ───────────────────────────────────────────────
 const state: AppState = {
@@ -25,6 +26,7 @@ const state: AppState = {
   userRole: 'attendee',
   highContrastMode: false,
   userPosition: { lat: 40.4531, lng: -3.6884 },
+  aiLoading: false,
 };
 
 // ── DOM Elements ────────────────────────────────────────────────────
@@ -83,13 +85,35 @@ function init(): void {
 }
 
 // ── Try Firebase Initialization ─────────────────────────────────────
+/**
+ * Initializes Firebase securely via GoogleServiceProvider and environment variables.
+ * Falls back to simulation mode if no configuration is found.
+ */
 function tryFirebaseInit(): void {
-  // Check for config in global scope (set by user in a separate script)
-  const win = window as any;
-  if (win.FIREBASE_CONFIG) {
-    initFirebase(win.FIREBASE_CONFIG);
+  // Check for config in Vite env or global scope
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_API_KEY) {
+    // @ts-ignore
+    const config = {
+      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+      appId: import.meta.env.VITE_FIREBASE_APP_ID
+    };
+    GoogleServiceProvider.getInstance().init(config);
+    initFirebase(config);
   } else {
-    console.info('[SmartVenue] No Firebase config found — running in simulation mode');
+    const win = window as any;
+    if (win.FIREBASE_CONFIG) {
+      GoogleServiceProvider.getInstance().init(win.FIREBASE_CONFIG);
+      initFirebase(win.FIREBASE_CONFIG);
+    } else {
+      console.info('[SmartVenue] No Firebase config found — running in simulation mode');
+      // Init provider anyway so Gemini can work independently
+      GoogleServiceProvider.getInstance().init({});
+    }
   }
 }
 
@@ -156,8 +180,27 @@ function updateUI(): void {
 
 // ── Toolbar Handlers ────────────────────────────────────────────────
 function updateToolbar(): void {
-  renderToolbar(toolbar, state.userRole, state.highContrastMode, state.emergencyMode,
-    toggleRole, toggleContrast, toggleEmergency);
+  renderToolbar(toolbar, state.userRole, state.highContrastMode, state.emergencyMode, state.aiLoading,
+    toggleRole, toggleContrast, toggleEmergency, handleAIConsult);
+}
+
+/**
+ * Invokes the Gemini SDK via GoogleServiceProvider and updates the UI.
+ * Prevents multiple concurrent requests by checking the aiLoading state.
+ */
+async function handleAIConsult(): Promise<void> {
+  if (state.aiLoading) return;
+  state.aiLoading = true;
+  updateToolbar();
+
+  const provider = GoogleServiceProvider.getInstance();
+  const advice = await provider.getGeminiConsultantAdvice("Championship Sporting Event");
+  
+  state.aiLoading = false;
+  updateToolbar();
+  
+  // Show result in a toast instead of standard alert for better UX
+  showToast(`🤖 AI Consultant:\n${advice}`, 'info');
 }
 
 function toggleRole(): void {
@@ -196,6 +239,8 @@ function showToast(message: string, type: 'info' | 'warning' | 'error' = 'info')
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
   toast.textContent = message;
+  // allow newlines in toasts
+  toast.style.whiteSpace = 'pre-wrap';
   toast.setAttribute('role', 'status');
   toast.setAttribute('aria-live', 'polite');
   document.body.appendChild(toast);
@@ -203,7 +248,7 @@ function showToast(message: string, type: 'info' | 'warning' | 'error' = 'info')
   setTimeout(() => {
     toast.classList.remove('toast-visible');
     setTimeout(() => toast.remove(), 300);
-  }, 3000);
+  }, type === 'info' ? 8000 : 3000); // keep info toasts longer since AI responses are long
 }
 
 // ── Keyboard Navigation ─────────────────────────────────────────────
