@@ -12,7 +12,9 @@ import {
   query, 
   where,
   Timestamp,
-  Firestore
+  Firestore,
+  QuerySnapshot,
+  DocumentData
 } from 'firebase/firestore';
 import { GoogleServiceProvider } from './GoogleServiceProvider.js';
 
@@ -107,7 +109,7 @@ export async function writeZoneData(zone: any): Promise<void> {
 export function syncZones(callback: (zones: any[]) => void): () => void {
   if (!db) return () => {};
   const q = query(collection(db, 'zones'));
-  return onSnapshot(q, (snapshot) => {
+  return onSnapshot(q, (snapshot: QuerySnapshot<DocumentData>) => {
     const zones = snapshot.docs.map(d => d.data());
     callback(zones);
   });
