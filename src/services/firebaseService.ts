@@ -1,125 +1,115 @@
 /**
- * SmartVenue — Firebase Service Layer
- * Handles Firestore operations with fallback to local simulation mode.
+ * SmartVenue — Firebase Integration Service (Modular)
+ * Manages real-time data sync for zones, queues, and incidents.
  */
 
-import {
-  ZoneData, QueueState, Incident, FirestoreZoneDoc,
-  FirestoreQueueDoc, FirestoreIncidentDoc, FirestoreRoutingDoc,
-} from '../types.js';
-import { sanitizeFirestoreDoc } from '../utils/validation.js';
+import { 
+  getFirestore, 
+  collection, 
+  doc, 
+  setDoc, 
+  onSnapshot, 
+  query, 
+  where,
+  Timestamp,
+  Firestore
+} from 'firebase/firestore';
+import { GoogleServiceProvider } from './GoogleServiceProvider.js';
 
-// Firebase types (loaded via CDN globals)
-declare const firebase: any;
+let db: Firestore | null = null;
+let connected = false;
 
-let db: any = null;
-let isFirebaseAvailable = false;
-
-// ── Initialize Firebase ─────────────────────────────────────────────
-export function initFirebase(config: Record<string, string>): boolean {
-  try {
-    if (typeof firebase === 'undefined') {
-      console.warn('[Firebase] SDK not loaded — running in simulation mode');
-      return false;
-    }
-    if (!firebase.apps?.length) {
-      firebase.initializeApp(config);
-    }
-    db = firebase.firestore();
-    isFirebaseAvailable = true;
-    console.info('[Firebase] Connected successfully');
-    return true;
-  } catch (err) {
-    console.warn('[Firebase] Init failed — running in simulation mode', err);
-    return false;
+/**
+ * Initializes the Firestore connection using the modular SDK.
+ */
+export function initFirebase(config: any): void {
+  const provider = GoogleServiceProvider.getInstance();
+  db = provider.db;
+  if (db) {
+    connected = true;
+    console.info('[Firebase] Modular Firestore service ready');
   }
 }
 
 export function isConnected(): boolean {
-  return isFirebaseAvailable;
+  return connected && db !== null;
 }
 
-// ── Write Zone Data ─────────────────────────────────────────────────
-export async function writeZoneData(zone: ZoneData): Promise<void> {
-  if (!db) return;
-  const doc: FirestoreZoneDoc = sanitizeFirestoreDoc({
-    zoneId: zone.zoneId,
-    densityScore: zone.densityScore,
-    currentOccupancy: zone.currentOccupancy,
-    isOpen: zone.isOpen,
-    timestamp: Date.now(),
-  });
-  try {
-    await db.collection('zones').doc(zone.zoneId).set(doc, { merge: true });
-  } catch (err) {
-    console.error('[Firebase] Write zone failed:', err);
-  }
-}
-
-// ── Write Queue Data ────────────────────────────────────────────────
-export async function writeQueueData(queue: QueueState): Promise<void> {
-  if (!db) return;
-  const doc: FirestoreQueueDoc = sanitizeFirestoreDoc({
-    zoneId: queue.zoneId,
-    queueLength: queue.queueLength,
-    serviceRate: queue.serviceRate,
-    timestamp: Date.now(),
-  });
-  try {
-    await db.collection('queues').doc(queue.zoneId).set(doc, { merge: true });
-  } catch (err) {
-    console.error('[Firebase] Write queue failed:', err);
-  }
-}
-
-// ── Write Incident ──────────────────────────────────────────────────
-export async function writeIncident(incident: Incident): Promise<void> {
-  if (!db) return;
-  const doc: FirestoreIncidentDoc = sanitizeFirestoreDoc({
-    incidentId: incident.incidentId,
-    zoneId: incident.zoneId,
-    type: incident.type,
-    severity: incident.severity,
-    active: incident.active,
-    description: incident.description,
-    timestamp: Date.now(),
-  });
-  try {
-    await db.collection('incidents').doc(incident.incidentId).set(doc);
-  } catch (err) {
-    console.error('[Firebase] Write incident failed:', err);
-  }
-}
-
-// ── Write Routing Suggestion ────────────────────────────────────────
+/**
+ * Writes a routing suggestion to Firestore for centralized monitoring.
+ */
 export async function writeRoutingSuggestion(gate: string, reason: string, score: number): Promise<void> {
   if (!db) return;
-  const doc: FirestoreRoutingDoc = sanitizeFirestoreDoc({
-    recommendedGate: gate,
-    reason: reason,
-    score: score,
-    timestamp: Date.now(),
-  });
   try {
-    await db.collection('routingSuggestions').doc('latest').set(doc);
+    const docRef = doc(db, 'analytics', 'current_routing');
+    await setDoc(docRef, {
+      recommendedGate: gate,
+      reason,
+      score,
+      timestamp: Timestamp.now()
+    }, { merge: true });
   } catch (err) {
-    console.error('[Firebase] Write routing failed:', err);
+    console.warn('[Firebase] Write routing failed:', err);
   }
 }
 
-// ── Listen for Real-Time Updates ────────────────────────────────────
-export function listenToZones(callback: (zones: FirestoreZoneDoc[]) => void): () => void {
+/**
+ * Writes an active incident to Firestore.
+ */
+export async function writeIncident(incident: any): Promise<void> {
+  if (!db) return;
+  try {
+    const docRef = doc(db, 'incidents', incident.incidentId);
+    await setDoc(docRef, {
+      ...incident,
+      timestamp: Timestamp.now()
+    });
+  } catch (err) {
+    console.warn('[Firebase] Write incident failed:', err);
+  }
+}
+
+/**
+ * Writes live queue metrics to Firestore.
+ */
+export async function writeQueueData(queue: any): Promise<void> {
+  if (!db) return;
+  try {
+    const docRef = doc(db, 'queues', queue.zoneId);
+    await setDoc(docRef, {
+      ...queue,
+      timestamp: Timestamp.now()
+    });
+  } catch (err) {
+    console.warn('[Firebase] Write queue failed:', err);
+  }
+}
+
+/**
+ * Writes live zone occupancy and density metrics to Firestore.
+ */
+export async function writeZoneData(zone: any): Promise<void> {
+  if (!db) return;
+  try {
+    const docRef = doc(db, 'zones', zone.zoneId);
+    await setDoc(docRef, {
+      ...zone,
+      timestamp: Timestamp.now()
+    });
+  } catch (err) {
+    console.warn('[Firebase] Write zone failed:', err);
+  }
+}
+
+/**
+ * Syncs zone data from Firestore (example for live mode).
+ */
+export function syncZones(callback: (zones: any[]) => void): () => void {
   if (!db) return () => {};
-  return db.collection('zones').onSnapshot((snapshot: any) => {
-    const zones = snapshot.docs.map((doc: any) => doc.data() as FirestoreZoneDoc);
+  const q = query(collection(db, 'zones'));
+  return onSnapshot(q, (snapshot) => {
+    const zones = snapshot.docs.map(d => d.data());
     callback(zones);
   });
 }
 
-export function listenToIncidents(callback: (incidents: FirestoreIncidentDoc[]) => void): () => void {
-  if (!db) return () => {};
-  return db.collection('incidents').where('active', '==', true).onSnapshot((snapshot: any) => {
-    const incidents = snapshot.docs.map((doc: any) => doc.data() as FirestoreIncidentDoc);
-    callback(incidents);
-  });
-}

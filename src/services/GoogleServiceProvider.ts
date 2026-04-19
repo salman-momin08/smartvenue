@@ -4,17 +4,28 @@
  * Handles Firebase Authentication, Firestore, and the Gemini Pro AI API.
  */
 
+import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
+import { 
+  getFirestore, 
+  initializeFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager,
+  Firestore,
+  getDoc,
+  doc
+} from 'firebase/firestore';
+import { getAuth, signInAnonymously, Auth, User } from 'firebase/auth';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
-
-declare const firebase: any;
+import { QueueState } from '../types.js';
 
 export class GoogleServiceProvider {
   private static instance: GoogleServiceProvider;
-  public db: any = null;
-  public auth: any = null;
+  public db: Firestore | null = null;
+  public auth: Auth | null = null;
   public geminiApiKey: string | null = null;
   private connected: boolean = false;
   private genAI: GoogleGenerativeAI | null = null;
+  private app: FirebaseApp | null = null;
 
   private constructor() {}
 
@@ -30,33 +41,40 @@ export class GoogleServiceProvider {
   }
 
   /**
-   * Initializes Firebase and Gemini SDKs
+   * Initializes Firebase and Gemini SDKs using the modern Modular pattern.
+   * Resolves deprecation warnings for persistent cache.
    * @param config Firebase configuration object
    * @param geminiKey Optional Gemini API key
    * @returns {boolean} True if successfully initialized
    */
-  public init(config: any, geminiKey?: string): boolean {
+  public init(config: Record<string, string>, geminiKey?: string): boolean {
     if (this.connected) return true;
 
     try {
-      if (typeof firebase !== 'undefined' && firebase.apps && config && Object.keys(config).length > 0) {
-        if (!firebase.apps.length) {
-          firebase.initializeApp(config);
-        }
-        this.db = firebase.firestore();
-        this.auth = firebase.auth();
+      if (config && Object.keys(config).length > 0) {
+        // Initialize Firebase App
+        this.app = getApps().length === 0 ? initializeApp(config) : getApps()[0];
+        
+        // Initialize Firestore with Modern Persistent Cache (Resolves Deprecation Warning)
+        this.db = initializeFirestore(this.app, {
+          localCache: persistentLocalCache({
+            tabManager: persistentMultipleTabManager()
+          })
+        });
+
+        // Initialize Auth
+        this.auth = getAuth(this.app);
       }
       
       // Pull from VITE env if not passed explicitly
-      // @ts-ignore
-      this.geminiApiKey = geminiKey || (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || null;
+      this.geminiApiKey = geminiKey || import.meta.env?.VITE_GEMINI_KEY || null;
       
       if (this.geminiApiKey) {
         this.genAI = new GoogleGenerativeAI(this.geminiApiKey);
       }
       
       this.connected = true;
-      console.info('[GoogleServiceProvider] Successfully initialized Firebase & Google AI (Gemini)');
+      console.info('[GoogleServiceProvider] Successfully initialized Modular Firebase & Google AI (Gemini)');
       return true;
     } catch (error) {
       console.error('[GoogleServiceProvider] Initialization failed:', error);
@@ -74,8 +92,6 @@ export class GoogleServiceProvider {
 
   /**
    * AI Event Consultant powered by Gemini Pro via @google/generative-ai SDK.
-   * Analyzes event parameters and provides professional catering/layout suggestions.
-   * Demonstrates Responsible AI with explicit SafetySettings.
    * @param {string} context Description of the event
    * @returns {Promise<string>} AI-generated consultation string
    */
@@ -83,8 +99,7 @@ export class GoogleServiceProvider {
     if (!this.genAI) return "Gemini AI API Key not configured. AI Consultant offline.";
     
     try {
-      // Use gemini-2.5-flash as the latest stable model
-      const model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const model = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
       const safetySettings = [
         {
@@ -121,17 +136,87 @@ export class GoogleServiceProvider {
   }
 
   /**
-   * Authenticate a user anonymously or via email (Auth integration)
-   * @returns {Promise<any>} The authenticated user credential
+   * Enterprise Predictive Analytics: Analyze queue history trends
+   * @param {Map<string, QueueState>} queues The active queue states with history arrays
+   * @returns {Promise<string>} AI-generated JSON string of predicted surges
    */
-  public async signInAnonymous(): Promise<any> {
+  public async predictCrowdSurges(queues: Map<string, QueueState>): Promise<string> {
+    if (!this.genAI) return "[]";
+    try {
+      const model = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const prompt = `Analyze this venue queue history (last 5 cycles) and identify exactly 2 zones that will have severe crowd surges in the next 10 minutes.
+Output ONLY a strict raw JSON array of objects (no markdown, no backticks) with keys:
+- zoneId (string)
+- reason (string: why staff should move here)
+- severity (string: 'High' or 'Critical')
+
+Queue Data: ${JSON.stringify(Array.from(queues.values()).map(q => ({ zoneId: q.zoneId, history: q.history, currentWait: q.estimatedWaitMinutes })))}`;
+      
+      const result = await model.generateContent(prompt);
+      const text = await result.response.text();
+      return text.replace(/```json\n|\n```|```/g, '').trim();
+    } catch(err) {
+      console.error('[GoogleServiceProvider] Predictive analytics error:', err);
+      return "[]";
+    }
+  }
+
+  /**
+   * Enterprise Operational Audit: Uses Gemini Pro to analyze entire venue state
+   * @param {any} venueState Serialized state of all zones and queues
+   * @returns {Promise<any>} Structured JSON audit
+   */
+  public async getVenueOperationalAudit(venueState: any): Promise<any> {
+    if (!this.genAI) return null;
+    try {
+      const model = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const prompt = `Perform a professional Venue Operations Audit. 
+Analyze these zones and queues: ${JSON.stringify(venueState)}.
+Return ONLY a raw JSON object with:
+- "efficiencyRating": (0-100)
+- "bottleneckZone": (zoneId)
+- "staffingReallocation": (string description)
+- "safetyRiskLevel": ("Low", "Medium", "High")`;
+
+      const result = await model.generateContent(prompt);
+      const text = await result.response.text();
+      return JSON.parse(text.replace(/```json\n|\n```|```/g, '').trim());
+    } catch (err) {
+      console.error('[GoogleServiceProvider] Audit Error:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Authenticate a user anonymously
+   * @returns {Promise<User | null>} The authenticated user
+   */
+  public async signInAnonymous(): Promise<User | null> {
     if (!this.auth) return null;
     try {
-      const credential = await this.auth.signInAnonymously();
+      const credential = await signInAnonymously(this.auth);
       return credential.user;
     } catch (e) {
       console.error('[GoogleServiceProvider] Auth Error:', e);
       return null;
+    }
+  }
+
+  /**
+   * Check if a specific document exists in a collection (Modular)
+   * Includes a retry delay to handle early-boot connectivity issues.
+   */
+  public async checkAdminStatus(uid: string): Promise<boolean> {
+    if (!this.db) return false;
+    try {
+      // Small delay to ensure Firestore connection is active
+      await new Promise(resolve => setTimeout(resolve, 800));
+      const docRef = doc(this.db, 'admin_users', uid);
+      const docSnap = await getDoc(docRef);
+      return docSnap.exists();
+    } catch (err) {
+      // Quietly fail as 'attendee' if offline during initial boot
+      return false;
     }
   }
 }

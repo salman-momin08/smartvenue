@@ -7,17 +7,23 @@
   <meta name="theme-color" content="#06080f" />
   <title>SmartVenue Assistant — Intelligent Venue Navigation</title>
 
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="apple-touch-icon" href="/favicon.png" />
+
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+
   <!-- Stylesheet -->
   <link rel="stylesheet" href="styles/main.css?v=2" />
 
   <!-- Google Maps API (CDN) — Replace YOUR_API_KEY or remove for simulation mode -->
-  <!-- <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=visualization" defer></script> -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=%VITE_GOOGLE_MAPS_API_KEY%&libraries=visualization&loading=async" defer></script>
 
   <!-- Firebase SDKs (CDN) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+  <!-- Firebase handled via NPM and Vite -->
   <!-- Vite handles env config securely -->
 </head>
 <body>

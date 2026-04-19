@@ -162,3 +162,7 @@ export interface FirestoreRoutingDoc {
   score: number;
   timestamp: number;
 }
+
+// Firebase types are now handled by the official modular SDK imports.
+
+

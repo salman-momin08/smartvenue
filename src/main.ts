@@ -14,6 +14,7 @@ import { initNotifications, notifyNewIncidents, notifyRouteChange } from './comp
 import { initFirebase, writeRoutingSuggestion, isConnected, writeIncident } from './services/firebaseService.js';
 import { GoogleServiceProvider } from './services/GoogleServiceProvider.js';
 import { hasPermission, validateRole } from './utils/validation.js';
+import { initErrorBoundary } from './components/errorBoundary.js';
 
 // ── Application State ───────────────────────────────────────────────
 const state: AppState = {
@@ -38,7 +39,10 @@ let toolbar: HTMLElement;
 let stopSimulation: (() => void) | null = null;
 
 // ── Initialize ──────────────────────────────────────────────────────
-function init(): void {
+async function init(): Promise<void> {
+  // Setup global error boundary first
+  initErrorBoundary();
+
   leftPanel = document.getElementById('left-panel')!;
   mapContainer = document.getElementById('map-container')!;
   rightPanel = document.getElementById('right-panel')!;
@@ -50,8 +54,8 @@ function init(): void {
     return;
   }
 
-  // Try Firebase init (works if config is available)
-  tryFirebaseInit();
+  // Try Firebase init (works if config is available) and wait for Auth
+  await tryFirebaseInit();
 
   // Create venue
   const config = createVenueConfig();
@@ -89,11 +93,11 @@ function init(): void {
  * Initializes Firebase securely via GoogleServiceProvider and environment variables.
  * Falls back to simulation mode if no configuration is found.
  */
-function tryFirebaseInit(): void {
+async function tryFirebaseInit(): Promise<void> {
+  let isConnectedToFirebase = false;
+
   // Check for config in Vite env or global scope
-  // @ts-ignore
-  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_API_KEY) {
-    // @ts-ignore
+  if (import.meta.env?.VITE_FIREBASE_API_KEY) {
     const config = {
       apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
       authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -104,16 +108,26 @@ function tryFirebaseInit(): void {
     };
     GoogleServiceProvider.getInstance().init(config);
     initFirebase(config);
+    isConnectedToFirebase = true;
   } else {
-    const win = window as any;
-    if (win.FIREBASE_CONFIG) {
-      GoogleServiceProvider.getInstance().init(win.FIREBASE_CONFIG);
-      initFirebase(win.FIREBASE_CONFIG);
-    } else {
-      console.info('[SmartVenue] No Firebase config found — running in simulation mode');
-      // Init provider anyway so Gemini can work independently
-      GoogleServiceProvider.getInstance().init({});
-    }
+    console.info('[SmartVenue] No Firebase config found — running in simulation mode');
+    // Init provider anyway so Gemini can work independently
+    GoogleServiceProvider.getInstance().init({});
+  }
+
+  // Perform Role Check
+  const provider = GoogleServiceProvider.getInstance();
+  const user = await provider.signInAnonymous();
+  
+  if (user && isConnectedToFirebase) {
+    const isAdmin = await provider.checkAdminStatus(user.uid);
+    state.userRole = isAdmin ? 'operator' : 'attendee';
+    console.info(`[Auth] User ${user.uid} authenticated as ${state.userRole.toUpperCase()}.`);
+  } else {
+    // For local simulation without Firebase DB, we'll force attendee, 
+    // but allow the developer to change DEFAULT_ROLE in .env if they really want.
+    const devRole = import.meta.env?.VITE_DEFAULT_ROLE;
+    state.userRole = (devRole === 'operator') ? 'operator' : 'attendee';
   }
 }
 
@@ -181,7 +195,7 @@ function updateUI(): void {
 // ── Toolbar Handlers ────────────────────────────────────────────────
 function updateToolbar(): void {
   renderToolbar(toolbar, state.userRole, state.highContrastMode, state.emergencyMode, state.aiLoading,
-    toggleRole, toggleContrast, toggleEmergency, handleAIConsult);
+    toggleContrast, toggleEmergency, handleAIConsult);
 }
 
 /**
@@ -203,11 +217,7 @@ async function handleAIConsult(): Promise<void> {
   showToast(`🤖 AI Consultant:\n${advice}`, 'info');
 }
 
-function toggleRole(): void {
-  state.userRole = state.userRole === 'attendee' ? 'operator' : 'attendee';
-  updateToolbar();
-  updateUI();
-}
+
 
 function toggleContrast(): void {
   state.highContrastMode = !state.highContrastMode;
@@ -263,8 +273,8 @@ function setupKeyboardNav(): void {
           if (hasPermission(state.userRole, 'canTriggerEmergency')) toggleEmergency();
           break;
         case 'r':
+          // Role toggle removed for security.
           e.preventDefault();
-          toggleRole();
           break;
         case 'c':
           e.preventDefault();

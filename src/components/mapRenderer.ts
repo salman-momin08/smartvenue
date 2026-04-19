@@ -1,10 +1,10 @@
 /**
- * SmartVenue — Map Renderer
+ * SmartVenue — Map Renderer (Stability Mode)
  * Renders venue zones on Google Maps with density-based color overlays.
- * Falls back to a canvas-based renderer when Google Maps API is unavailable.
+ * Uses Legacy Markers for maximum compatibility without requiring a Map ID.
  */
 
-import { ZoneData, DensityCategory, LatLng, Incident, VenueConfig } from '../types.js';
+import { ZoneData, DensityCategory, LatLng, VenueConfig } from '../types.js';
 
 declare const google: any;
 
@@ -35,8 +35,11 @@ export function initGoogleMap(container: HTMLElement, config: VenueConfig): bool
     }
 
     map = new google.maps.Map(container, {
-      center: config.center, zoom: config.zoom,
+      center: config.center, 
+      zoom: config.zoom,
       mapTypeId: 'satellite',
+      disableDefaultUI: true,
+      zoomControl: true,
       styles: [
         { elementType: 'geometry', stylers: [{ color: '#0a0e1a' }] },
         { elementType: 'labels.text.fill', stylers: [{ color: '#8899aa' }] },
@@ -44,9 +47,6 @@ export function initGoogleMap(container: HTMLElement, config: VenueConfig): bool
         { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1a2332' }] },
         { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0d1b2a' }] },
       ],
-      disableDefaultUI: true,
-      zoomControl: true,
-      mapTypeControl: false,
     });
 
     for (const zone of config.zones) {
@@ -65,9 +65,12 @@ function createZonePolygon(zone: ZoneData): void {
   if (!map) return;
   const colors = DENSITY_COLORS[zone.densityCategory];
   const polygon = new google.maps.Polygon({
-    paths: zone.polygon, map,
-    fillColor: colors.fill, fillOpacity: 0.6,
-    strokeColor: colors.stroke, strokeWeight: 2,
+    paths: zone.polygon, 
+    map,
+    fillColor: colors.fill, 
+    fillOpacity: 0.6,
+    strokeColor: colors.stroke, 
+    strokeWeight: 2,
   });
   polygon.addListener('click', () => showZoneInfo(zone));
   polygons.set(zone.zoneId, polygon);
@@ -75,18 +78,23 @@ function createZonePolygon(zone: ZoneData): void {
 
 function createZoneMarker(zone: ZoneData): void {
   if (!map) return;
+  
   const marker = new google.maps.Marker({
-    position: zone.center, map,
+    position: zone.center,
+    map,
     label: { text: ZONE_ICONS[zone.type] || '📍', fontSize: '18px' },
     title: zone.name,
   });
+
   const iw = new google.maps.InfoWindow({
     content: buildInfoContent(zone),
   });
+
   marker.addListener('click', () => {
     infoWindows.forEach(w => w.close());
     iw.open(map, marker);
   });
+  
   markers.set(zone.zoneId, marker);
   infoWindows.set(zone.zoneId, iw);
 }
@@ -111,7 +119,6 @@ function buildInfoContent(zone: ZoneData): string {
   </div>`;
 }
 
-// ── Update Zone on Map ──────────────────────────────────────────────
 export function updateZoneOnMap(zone: ZoneData): void {
   if (map && polygons.has(zone.zoneId)) {
     const colors = DENSITY_COLORS[zone.densityCategory];
@@ -130,7 +137,6 @@ export function updateAllZones(zones: Map<string, ZoneData>): void {
   if (canvasCtx) renderCanvas(zones);
 }
 
-// ── Highlight Emergency Exits ───────────────────────────────────────
 export function highlightEmergencyExits(zones: Map<string, ZoneData>, active: boolean): void {
   for (const zone of zones.values()) {
     if (zone.type === 'exit') {
@@ -147,9 +153,8 @@ export function highlightEmergencyExits(zones: Map<string, ZoneData>, active: bo
 }
 
 // ════════════════════════════════════════════════════════════════════
-// CANVAS FALLBACK RENDERER (when Google Maps is unavailable)
+// CANVAS FALLBACK RENDERER
 // ════════════════════════════════════════════════════════════════════
-
 let canvasCtx: CanvasRenderingContext2D | null = null;
 let canvasEl: HTMLCanvasElement | null = null;
 let canvasConfig: VenueConfig | null = null;
@@ -167,7 +172,6 @@ function initCanvasMap(container: HTMLElement, config: VenueConfig): void {
   canvasEl.style.borderRadius = '12px';
   container.appendChild(canvasEl);
 
-  // Tooltip
   tooltipEl = document.createElement('div');
   tooltipEl.className = 'canvas-tooltip';
   tooltipEl.style.cssText = 'position:absolute;display:none;background:rgba(10,14,26,0.95);color:#f9fafb;padding:10px 14px;border-radius:8px;font-size:13px;pointer-events:none;border:1px solid rgba(255,255,255,0.15);backdrop-filter:blur(10px);z-index:10;max-width:220px;';
@@ -210,46 +214,17 @@ function renderCanvas(zones: Map<string, ZoneData>): void {
   const w = canvasEl.clientWidth;
   const h = canvasEl.clientHeight;
 
-  // Background
   ctx.fillStyle = '#0a0e1a';
   ctx.fillRect(0, 0, w, h);
 
-  // Grid
   ctx.strokeStyle = 'rgba(255,255,255,0.03)';
   ctx.lineWidth = 1;
   for (let i = 0; i < w; i += 30) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, h); ctx.stroke(); }
   for (let i = 0; i < h; i += 30) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(w, i); ctx.stroke(); }
 
-  // Hall outline (rectangle)
-  ctx.beginPath();
-  ctx.rect(w * 0.1, h * 0.1, w * 0.8, h * 0.8);
-  ctx.strokeStyle = 'rgba(59,130,246,0.2)';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  // Main Exhibition Floor
-  ctx.beginPath();
-  ctx.rect(w * 0.25, h * 0.25, w * 0.5, h * 0.5);
-  ctx.fillStyle = 'rgba(59,130,246,0.05)';
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(59,130,246,0.15)';
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  // Zones
   for (const zone of zones.values()) {
     drawCanvasZone(ctx, zone, w, h);
   }
-
-  // Title
-  ctx.font = '600 14px Inter, system-ui, sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.textAlign = 'left';
-  ctx.fillText('SmartVenue Exhibition Hall — Live Density Map', 16, 28);
-
-  // Legend
-  drawLegend(ctx, w, h);
-
   canvasZones = zones;
 }
 
@@ -259,7 +234,6 @@ function drawCanvasZone(ctx: CanvasRenderingContext2D, zone: ZoneData, w: number
   const radius = zone.type === 'seating' ? 28 : zone.type === 'gate' ? 22 : 18;
   const isHovered = hoveredZone === zone.zoneId;
 
-  // Glow
   ctx.beginPath();
   ctx.arc(center.x, center.y, radius + (isHovered ? 8 : 4), 0, Math.PI * 2);
   const glow = ctx.createRadialGradient(center.x, center.y, radius * 0.5, center.x, center.y, radius + 10);
@@ -268,7 +242,6 @@ function drawCanvasZone(ctx: CanvasRenderingContext2D, zone: ZoneData, w: number
   ctx.fillStyle = glow;
   ctx.fill();
 
-  // Hexagon
   ctx.beginPath();
   for (let i = 0; i < 6; i++) {
     const angle = (Math.PI / 3) * i - Math.PI / 2;
@@ -283,32 +256,10 @@ function drawCanvasZone(ctx: CanvasRenderingContext2D, zone: ZoneData, w: number
   ctx.lineWidth = isHovered ? 2.5 : 1.5;
   ctx.stroke();
 
-  // Icon
   ctx.font = '14px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(ZONE_ICONS[zone.type] || '📍', center.x, center.y - 2);
-
-  // Density %
-  ctx.font = '600 9px Inter, system-ui, sans-serif';
-  ctx.fillStyle = '#f9fafb';
-  ctx.fillText(`${Math.round(zone.densityScore)}%`, center.x, center.y + 12);
-}
-
-function drawLegend(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-  const items: [string, DensityCategory][] = [['Low', 'LOW'], ['Medium', 'MEDIUM'], ['High', 'HIGH'], ['Critical', 'CRITICAL']];
-  const y = h - 20;
-  ctx.font = '500 11px Inter, system-ui, sans-serif';
-  ctx.textAlign = 'left';
-  let x = 16;
-  for (const [label, cat] of items) {
-    const c = DENSITY_COLORS[cat];
-    ctx.fillStyle = c.stroke;
-    ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.fillText(label, x + 10, y + 4);
-    x += ctx.measureText(label).width + 28;
-  }
 }
 
 function handleCanvasHover(e: MouseEvent): void {
@@ -326,7 +277,7 @@ function handleCanvasHover(e: MouseEvent): void {
     const dist = Math.sqrt((mx - pos.x) ** 2 + (my - pos.y) ** 2);
     if (dist <= radius + 5) {
       hoveredZone = zone.zoneId;
-      tooltipEl.innerHTML = `<strong>${zone.name}</strong><br/>Density: <span style="color:${DENSITY_COLORS[zone.densityCategory].stroke}">${zone.densityCategory}</span> (${Math.round(zone.densityScore)}%)<br/>Occupancy: ${zone.currentOccupancy}/${zone.capacity}<br/>Status: ${zone.isOpen ? '✅ Open' : '🚫 Closed'}`;
+      tooltipEl.innerHTML = `<strong>${zone.name}</strong><br/>Density: ${zone.densityCategory} (${Math.round(zone.densityScore)}%)`;
       tooltipEl.style.display = 'block';
       tooltipEl.style.left = `${mx + 15}px`;
       tooltipEl.style.top = `${my - 10}px`;

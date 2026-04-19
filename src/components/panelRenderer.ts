@@ -220,7 +220,6 @@ export function renderEmergencyBanner(container: HTMLElement, active: boolean, m
  * @param {boolean} highContrast High contrast mode active state
  * @param {boolean} emergencyMode Emergency mode active state
  * @param {boolean} aiLoading Loading state for the AI Consultant
- * @param {Function} onToggleRole Callback to switch roles
  * @param {Function} onToggleContrast Callback to toggle contrast
  * @param {Function} onToggleEmergency Callback to toggle emergency mode
  * @param {Function} onAIConsult Callback to invoke Gemini AI
@@ -231,15 +230,25 @@ export function renderToolbar(
   highContrast: boolean,
   emergencyMode: boolean,
   aiLoading: boolean,
-  onToggleRole: () => void,
   onToggleContrast: () => void,
   onToggleEmergency: () => void,
   onAIConsult: () => void,
 ): void {
+  const operatorButtons = role === 'operator' ? `
+      <button id="btn-role" class="toolbar-btn active" aria-label="Operator active" title="Operator privileges active" disabled>
+        <span class="btn-icon">🔧</span>
+        <span class="btn-text">Operator</span>
+      </button>
+      <button id="btn-emergency" class="toolbar-btn btn-emergency ${emergencyMode ? 'active' : ''}" aria-label="Toggle emergency mode" title="Emergency mode">
+        <span class="btn-icon">🚨</span>
+        <span class="btn-text">Emergency</span>
+      </button>
+  ` : '';
+
   container.innerHTML = `
     <div class="toolbar-left">
       <div class="toolbar-brand">
-        <img src="https://storage.googleapis.com/smartvenue-assets/logo-hires.png" alt="SmartVenue Official Logo" width="24" height="24" style="border-radius:4px;" onerror="this.style.display='none'">
+        <img src="/logo.png" alt="SmartVenue Official Logo" width="24" height="24" style="border-radius:4px;" onerror="this.style.display='none'">
         <span class="brand-icon" aria-hidden="true">🏟️</span>
         <span class="brand-name">SmartVenue</span>
         <span class="brand-tag">Assistant</span>
@@ -250,17 +259,10 @@ export function renderToolbar(
         <span class="btn-icon">${aiLoading ? '⏳' : '✨'}</span>
         <span class="btn-text">${aiLoading ? 'Thinking...' : 'AI Consultant'}</span>
       </button>
-      <button id="btn-role" class="toolbar-btn" aria-label="Switch role" title="Current: ${role}">
-        <span class="btn-icon">${role === 'operator' ? '🔧' : '👤'}</span>
-        <span class="btn-text">${role}</span>
-      </button>
+      ${operatorButtons}
       <button id="btn-contrast" class="toolbar-btn ${highContrast ? 'active' : ''}" aria-label="Toggle high contrast" title="High contrast mode">
         <span class="btn-icon">🌓</span>
         <span class="btn-text">Contrast</span>
-      </button>
-      <button id="btn-emergency" class="toolbar-btn btn-emergency ${emergencyMode ? 'active' : ''}" aria-label="Toggle emergency mode" title="Emergency mode">
-        <span class="btn-icon">🚨</span>
-        <span class="btn-text">Emergency</span>
       </button>
       <div class="toolbar-status">
         <span class="status-dot ${emergencyMode ? 'status-red' : 'status-green'}"></span>
@@ -268,7 +270,6 @@ export function renderToolbar(
       </div>
     </div>`;
 
-  document.getElementById('btn-role')?.addEventListener('click', onToggleRole);
   document.getElementById('btn-contrast')?.addEventListener('click', onToggleContrast);
   document.getElementById('btn-emergency')?.addEventListener('click', onToggleEmergency);
   document.getElementById('ai-consultant-btn')?.addEventListener('click', onAIConsult);

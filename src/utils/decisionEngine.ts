@@ -46,6 +46,14 @@ export function classifyDensity(score: number): DensityCategory {
 }
 
 // ── Haversine Distance (meters) ─────────────────────────────────────
+/**
+ * Calculates the great-circle distance between two points on a sphere given their longitudes and latitudes.
+ * It uses the Haversine formula, which remains accurate even for small distances.
+ * 
+ * @param {LatLng} a - The starting coordinate (e.g., user position)
+ * @param {LatLng} b - The ending coordinate (e.g., zone center)
+ * @returns {number} The distance in meters
+ */
 function haversineDistance(a: LatLng, b: LatLng): number {
   const R = 6371e3;
   const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -58,6 +66,23 @@ function haversineDistance(a: LatLng, b: LatLng): number {
 }
 
 // ── Score a Single Zone ─────────────────────────────────────────────
+/**
+ * Evaluates a zone's suitability for a user by calculating a weighted multi-factor score.
+ * A lower score indicates a more favorable recommendation.
+ * 
+ * Math:
+ * 1. Distance Factor = min(haversine_distance / 500m, 1.0)
+ * 2. Queue Factor = min(estimated_wait / 30m, 1.0)
+ * 3. Density Factor = density_score / 100
+ * 4. Total Score = (Wd * DF) + (Wq * QF) + (Wden * DenF) + IncidentPenalty
+ * 
+ * @param {ZoneData} zone - The target zone's real-time state
+ * @param {QueueState | undefined} queue - The current queue metrics for the zone
+ * @param {LatLng} userPos - The current mock GPS coordinates of the user
+ * @param {DecisionWeights} weights - The algorithmic weights applied to distance, queue, and density
+ * @param {Incident[]} incidents - List of currently active venue incidents
+ * @returns {number} The final computed decision score (Infinity if closed or critically unsafe)
+ */
 function scoreZone(
   zone: ZoneData,
   queue: QueueState | undefined,

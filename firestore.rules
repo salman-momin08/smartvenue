@@ -1,0 +1,41 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Function to check if the user is an admin
+    function isAdmin() {
+      return request.auth != null && exists(/databases/$(database)/documents/admin_users/$(request.auth.uid));
+    }
+
+    // ── Zones ───────────────────────────────────────────────
+    match /zones/{zoneId} {
+      allow read: if true; // Attendees need to read live density
+      allow write: if isAdmin(); // Only operators can update zone states
+    }
+
+    // ── Queues ──────────────────────────────────────────────
+    match /queues/{queueId} {
+      allow read: if true; // Attendees need queue visibility
+      allow write: if isAdmin(); // Only operators can update queues
+    }
+
+    // ── Incidents ───────────────────────────────────────────
+    match /incidents/{incidentId} {
+      allow read: if true; // Everyone reads active incidents
+      allow write: if isAdmin(); // Only operators can declare incidents
+    }
+
+    // ── Routing Suggestions ─────────────────────────────────
+    match /routingSuggestions/{suggestionId} {
+      allow read: if true;
+      allow write: if isAdmin(); // Only the simulation engine/operator pushes global suggestions
+    }
+
+    // ── Admin Users ─────────────────────────────────────────
+    match /admin_users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId; // Users can check if they are an admin
+      allow write: if false; // Only manageable from the Firebase Console or Admin SDK
+    }
+  }
+}
