@@ -199,6 +199,57 @@ function updateToolbar(): void {
 }
 
 /**
+ * Operator Feature: Show Edit Modal for Room Details
+ */
+(window as any).showOperatorEdit = (zoneId: string) => {
+  const zone = state.zones.get(zoneId);
+  if (!zone) return;
+
+  const modal = document.createElement('div');
+  modal.className = 'operator-modal-overlay';
+  modal.innerHTML = `
+    <div class="operator-modal">
+      <h3>Edit Room Details: ${zone.name}</h3>
+      <div class="field">
+        <label>Detailed Location</label>
+        <input type="text" id="edit-loc" value="${zone.detailedLocation || ''}" placeholder="e.g. Level 2, Room B">
+      </div>
+      <div class="field">
+        <label>Room Area</label>
+        <input type="text" id="edit-area" value="${zone.roomArea || ''}" placeholder="e.g. 450m²">
+      </div>
+      <div class="modal-actions">
+        <button id="cancel-edit" class="secondary">Cancel</button>
+        <button id="save-edit" class="primary">Save Changes</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  document.getElementById('cancel-edit')?.addEventListener('click', () => modal.remove());
+  document.getElementById('save-edit')?.addEventListener('click', async () => {
+    const loc = (document.getElementById('edit-loc') as HTMLInputElement).value;
+    const area = (document.getElementById('edit-area') as HTMLInputElement).value;
+    
+    // Update local state
+    zone.detailedLocation = loc;
+    zone.roomArea = area;
+    
+    // Update live Firestore if connected
+    if (import.meta.env.VITE_APP_MODE === 'live') {
+      const { writeZoneData } = await import('./services/firebaseService.js');
+      await writeZoneData(zone);
+    }
+    
+    // Refresh UI
+    const { updateZoneOnMap } = await import('./components/mapRenderer.js');
+    updateZoneOnMap(zone);
+    modal.remove();
+  });
+};
+
+/**
+ * Handle AI Consultation Request
  * Invokes the Gemini SDK via GoogleServiceProvider and updates the UI.
  * Prevents multiple concurrent requests by checking the aiLoading state.
  */

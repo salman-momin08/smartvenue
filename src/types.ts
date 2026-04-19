@@ -34,6 +34,8 @@ export interface ZoneData {
   capacity: number;
   currentOccupancy: number;
   isOpen: boolean;
+  roomArea?: string;             // Detailed area info (e.g. 500m2)
+  detailedLocation?: string;     // Specific room/loc (e.g. Level 2, Room B)
   timestamp: number;
 }
 

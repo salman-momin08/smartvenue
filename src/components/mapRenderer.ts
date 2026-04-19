@@ -26,10 +26,12 @@ const polygons = new Map<string, any>();
 const markers = new Map<string, any>();
 const infoWindows = new Map<string, any>();
 
-export function initGoogleMap(container: HTMLElement, config: VenueConfig): boolean {
+export async function initGoogleMap(container: HTMLElement, config: VenueConfig): Promise<boolean> {
   try {
-    if (typeof google === 'undefined' || !google.maps) {
-      console.warn('[MapRenderer] Google Maps not available — using canvas fallback');
+    const isSimulation = import.meta.env.VITE_APP_MODE === 'simulation';
+
+    if (isSimulation || typeof google === 'undefined' || !google.maps) {
+      console.info(isSimulation ? '[MapRenderer] Simulation mode — using local floorplan' : '[MapRenderer] Google Maps not available — using canvas fallback');
       initCanvasMap(container, config);
       return false;
     }
@@ -111,11 +113,24 @@ function showZoneInfo(zone: ZoneData): void {
 
 function buildInfoContent(zone: ZoneData): string {
   const colors = DENSITY_COLORS[zone.densityCategory];
-  return `<div style="color:#111;font-family:Inter,sans-serif;padding:4px">
-    <strong>${zone.name}</strong><br/>
-    <span style="color:${colors.stroke}">● ${zone.densityCategory}</span> — ${Math.round(zone.densityScore)}%<br/>
-    Occupancy: ${zone.currentOccupancy}/${zone.capacity}<br/>
-    Status: ${zone.isOpen ? '✅ Open' : '🚫 Closed'}
+  const isOperator = (window as any).appState?.userRole === 'operator';
+  
+  return `<div style="color:#111;font-family:Inter,sans-serif;padding:8px;min-width:180px">
+    <div style="font-weight:700;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:4px">${zone.name}</div>
+    <div style="margin-bottom:8px">
+      <span style="color:${colors.stroke};font-weight:600">● ${zone.densityCategory}</span> — ${Math.round(zone.densityScore)}%<br/>
+      Occupancy: <strong>${zone.currentOccupancy}</strong> / ${zone.capacity}
+    </div>
+    <div style="font-size:12px;color:#666;margin-bottom:10px">
+      Loc: ${zone.detailedLocation || 'Not specified'}<br/>
+      Area: ${zone.roomArea || 'N/A'}
+    </div>
+    ${isOperator ? `
+      <button onclick="window.showOperatorEdit('${zone.zoneId}')" 
+              style="width:100%;padding:6px;background:#0066ff;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:12px">
+        Edit Room Details
+      </button>
+    ` : ''}
   </div>`;
 }
 
@@ -162,9 +177,23 @@ let canvasZones: Map<string, ZoneData> = new Map();
 let tooltipEl: HTMLDivElement | null = null;
 let hoveredZone: string | null = null;
 
+let backgroundImg: HTMLImageElement | null = null;
+
 function initCanvasMap(container: HTMLElement, config: VenueConfig): void {
   container.innerHTML = '';
   container.style.position = 'relative';
+  
+  // Load floorplan for simulation background
+  backgroundImg = new Image();
+  backgroundImg.src = '/floorplan.png';
+  backgroundImg.onload = () => {
+    if (canvasCtx) renderCanvas(canvasZones);
+  };
+  backgroundImg.onerror = () => {
+    console.warn('[MapRenderer] Floorplan failed to load, falling back to dark grid.');
+    backgroundImg = null;
+  };
+
   canvasEl = document.createElement('canvas');
   canvasEl.id = 'venue-canvas';
   canvasEl.style.width = '100%';
@@ -216,6 +245,13 @@ function renderCanvas(zones: Map<string, ZoneData>): void {
 
   ctx.fillStyle = '#0a0e1a';
   ctx.fillRect(0, 0, w, h);
+
+  // Draw background floorplan (with safety check for 'broken' state)
+  if (backgroundImg && backgroundImg.complete && backgroundImg.naturalWidth > 0) {
+    ctx.globalAlpha = 0.4; // Subtle background
+    ctx.drawImage(backgroundImg, 0, 0, w, h);
+    ctx.globalAlpha = 1.0;
+  }
 
   ctx.strokeStyle = 'rgba(255,255,255,0.03)';
   ctx.lineWidth = 1;
