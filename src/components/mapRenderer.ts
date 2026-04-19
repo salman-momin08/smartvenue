@@ -6,7 +6,17 @@
 
 import { ZoneData, DensityCategory, LatLng, VenueConfig } from '../types.js';
 
-declare const google: any;
+interface GoogleMapsGlobal {
+  maps: {
+    Map: any;
+    Polygon: any;
+    Marker: any;
+    InfoWindow: any;
+    LatLng: any;
+    ControlPosition: any;
+  };
+}
+declare const google: GoogleMapsGlobal;
 
 // ── Density Colors ──────────────────────────────────────────────────
 const DENSITY_COLORS: Record<DensityCategory, { fill: string; stroke: string; glow: string }> = {
