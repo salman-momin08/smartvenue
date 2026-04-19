@@ -49,7 +49,7 @@ export function sendPushNotification(title: string, options?: NotificationOption
 }
 
 // ── Notify on New Incidents ──────────────────────────────────────────
-export function notifyNewIncidents(incidents: any[]): void {
+export function notifyNewIncidents(incidents: Incident[]): void {
   const activeIncidents = incidents.filter(i => i.active);
 
   for (const incident of activeIncidents) {

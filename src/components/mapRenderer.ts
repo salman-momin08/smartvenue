@@ -17,7 +17,7 @@ const DENSITY_COLORS: Record<DensityCategory, { fill: string; stroke: string; gl
 };
 
 const ZONE_ICONS: Record<string, string> = {
-  gate: '🚪', restroom: '🚻', food: '🍔', seating: '💺', exit: '🚨',
+  gate: '🎫', restroom: '💬', food: '☕', seating: '🖥️', exit: '🚨',
 };
 
 // ── Google Maps Renderer ────────────────────────────────────────────

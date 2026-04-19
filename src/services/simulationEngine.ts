@@ -1,6 +1,7 @@
 /**
- * SmartVenue — Simulation Engine
- * Generates realistic venue data: density changes, queue updates, and incident triggers.
+ * SmartVenue — Simulation Engine (PromptWars Exhibition Hall)
+ * Generates realistic exhibition venue data: booth density, stage crowding,
+ * queue updates at registration/food, and incident triggers.
  * Pushes updates every 3 seconds to drive real-time intelligence.
  */
 
@@ -9,8 +10,8 @@ import { classifyDensity } from '../utils/decisionEngine.js';
 import { updateQueueHistory } from '../utils/queuePredictor.js';
 import { writeZoneData, writeQueueData, writeIncident, isConnected } from '../services/firebaseService.js';
 
-// ── Stadium Center (Generic Venue Location) ─────────────────────────
-const VENUE_CENTER: LatLng = { lat: 40.4531, lng: -3.6884 }; // Madrid area
+// ── Exhibition Hall Center (PromptWars Venue) ───────────────────────
+const VENUE_CENTER: LatLng = { lat: 40.4531, lng: -3.6884 };
 
 // ── Generate Zone Polygon (hexagonal approximation) ─────────────────
 function makePolygon(center: LatLng, radius: number, sides: number = 6): LatLng[] {
@@ -25,35 +26,40 @@ function makePolygon(center: LatLng, radius: number, sides: number = 6): LatLng[
   return pts;
 }
 
-// ── Create Initial Venue Layout ─────────────────────────────────────
+// ── Create Exhibition Hall Layout ───────────────────────────────────
 export function createVenueConfig(): VenueConfig {
-  const r = 0.0015; // zone radius in degrees
+  const r = 0.0015;
   const zoneDefinitions = [
-    // Gates
-    { zoneId: 'gate-a', name: 'Gate A (North)', type: 'gate' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.004, lng: VENUE_CENTER.lng }, capacity: 2000 },
-    { zoneId: 'gate-b', name: 'Gate B (East)', type: 'gate' as ZoneType, center: { lat: VENUE_CENTER.lat, lng: VENUE_CENTER.lng + 0.005 }, capacity: 1800 },
-    { zoneId: 'gate-c', name: 'Gate C (South)', type: 'gate' as ZoneType, center: { lat: VENUE_CENTER.lat - 0.004, lng: VENUE_CENTER.lng }, capacity: 2200 },
-    { zoneId: 'gate-d', name: 'Gate D (West)', type: 'gate' as ZoneType, center: { lat: VENUE_CENTER.lat, lng: VENUE_CENTER.lng - 0.005 }, capacity: 1600 },
-    // Restrooms
-    { zoneId: 'restroom-ne', name: 'Restroom NE', type: 'restroom' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.0025, lng: VENUE_CENTER.lng + 0.003 }, capacity: 200 },
-    { zoneId: 'restroom-se', name: 'Restroom SE', type: 'restroom' as ZoneType, center: { lat: VENUE_CENTER.lat - 0.0025, lng: VENUE_CENTER.lng + 0.003 }, capacity: 200 },
-    { zoneId: 'restroom-sw', name: 'Restroom SW', type: 'restroom' as ZoneType, center: { lat: VENUE_CENTER.lat - 0.0025, lng: VENUE_CENTER.lng - 0.003 }, capacity: 180 },
-    { zoneId: 'restroom-nw', name: 'Restroom NW', type: 'restroom' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.0025, lng: VENUE_CENTER.lng - 0.003 }, capacity: 220 },
-    // Food Stalls
-    { zoneId: 'food-n', name: 'Food Court North', type: 'food' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.003, lng: VENUE_CENTER.lng + 0.002 }, capacity: 500 },
-    { zoneId: 'food-e', name: 'Food Court East', type: 'food' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.001, lng: VENUE_CENTER.lng + 0.004 }, capacity: 400 },
-    { zoneId: 'food-s', name: 'Food Court South', type: 'food' as ZoneType, center: { lat: VENUE_CENTER.lat - 0.003, lng: VENUE_CENTER.lng - 0.002 }, capacity: 450 },
-    { zoneId: 'food-w', name: 'Food Court West', type: 'food' as ZoneType, center: { lat: VENUE_CENTER.lat - 0.001, lng: VENUE_CENTER.lng - 0.004 }, capacity: 380 },
-    // Seating Sections
-    { zoneId: 'seat-n', name: 'Section North', type: 'seating' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.002, lng: VENUE_CENTER.lng }, capacity: 5000 },
-    { zoneId: 'seat-e', name: 'Section East', type: 'seating' as ZoneType, center: { lat: VENUE_CENTER.lat, lng: VENUE_CENTER.lng + 0.002 }, capacity: 4500 },
-    { zoneId: 'seat-s', name: 'Section South', type: 'seating' as ZoneType, center: { lat: VENUE_CENTER.lat - 0.002, lng: VENUE_CENTER.lng }, capacity: 5000 },
-    { zoneId: 'seat-w', name: 'Section West', type: 'seating' as ZoneType, center: { lat: VENUE_CENTER.lat, lng: VENUE_CENTER.lng - 0.002 }, capacity: 4000 },
-    // Emergency Exits
-    { zoneId: 'exit-ne', name: 'Exit NE', type: 'exit' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.0035, lng: VENUE_CENTER.lng + 0.004 }, capacity: 1000 },
-    { zoneId: 'exit-se', name: 'Exit SE', type: 'exit' as ZoneType, center: { lat: VENUE_CENTER.lat - 0.0035, lng: VENUE_CENTER.lng + 0.004 }, capacity: 1000 },
-    { zoneId: 'exit-sw', name: 'Exit SW', type: 'exit' as ZoneType, center: { lat: VENUE_CENTER.lat - 0.0035, lng: VENUE_CENTER.lng - 0.004 }, capacity: 1200 },
-    { zoneId: 'exit-nw', name: 'Exit NW', type: 'exit' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.0035, lng: VENUE_CENTER.lng - 0.004 }, capacity: 1100 },
+    // ─── Registration & Entry Gates ─────────────────────────────
+    { zoneId: 'reg-main', name: 'Main Registration', type: 'gate' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.004, lng: VENUE_CENTER.lng }, capacity: 2000, detailedLocation: 'Hall Entrance, Ground Floor', roomArea: '350m²' },
+    { zoneId: 'reg-vip', name: 'VIP & Speaker Check-in', type: 'gate' as ZoneType, center: { lat: VENUE_CENTER.lat, lng: VENUE_CENTER.lng + 0.005 }, capacity: 500, detailedLocation: 'East Wing, Level 1', roomArea: '120m²' },
+    { zoneId: 'reg-south', name: 'South Entrance', type: 'gate' as ZoneType, center: { lat: VENUE_CENTER.lat - 0.004, lng: VENUE_CENTER.lng }, capacity: 1800, detailedLocation: 'South Lobby', roomArea: '280m²' },
+    { zoneId: 'reg-press', name: 'Press & Media Entry', type: 'gate' as ZoneType, center: { lat: VENUE_CENTER.lat, lng: VENUE_CENTER.lng - 0.005 }, capacity: 400, detailedLocation: 'West Wing, Ground Floor', roomArea: '100m²' },
+
+    // ─── Exhibition Booth Clusters ──────────────────────────────
+    { zoneId: 'booth-a', name: 'Booth Zone A (AI/ML)', type: 'seating' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.002, lng: VENUE_CENTER.lng + 0.001 }, capacity: 800, detailedLocation: 'Hall A, Booths A1–A20', roomArea: '1200m²' },
+    { zoneId: 'booth-b', name: 'Booth Zone B (Cloud)', type: 'seating' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.001, lng: VENUE_CENTER.lng - 0.002 }, capacity: 600, detailedLocation: 'Hall B, Booths B1–B15', roomArea: '900m²' },
+    { zoneId: 'booth-c', name: 'Booth Zone C (DevTools)', type: 'seating' as ZoneType, center: { lat: VENUE_CENTER.lat - 0.001, lng: VENUE_CENTER.lng + 0.002 }, capacity: 700, detailedLocation: 'Hall C, Booths C1–C18', roomArea: '1050m²' },
+    { zoneId: 'booth-d', name: 'Booth Zone D (Startups)', type: 'seating' as ZoneType, center: { lat: VENUE_CENTER.lat - 0.002, lng: VENUE_CENTER.lng - 0.001 }, capacity: 500, detailedLocation: 'Hall D, Booths D1–D12', roomArea: '750m²' },
+
+    // ─── Keynote & Workshop Stages ──────────────────────────────
+    { zoneId: 'stage-main', name: 'Main Keynote Stage', type: 'seating' as ZoneType, center: { lat: VENUE_CENTER.lat, lng: VENUE_CENTER.lng }, capacity: 3000, detailedLocation: 'Central Arena, Level 0', roomArea: '2500m²' },
+    { zoneId: 'stage-work', name: 'Workshop Theater', type: 'seating' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.003, lng: VENUE_CENTER.lng - 0.003 }, capacity: 400, detailedLocation: 'West Mezzanine, Room W2', roomArea: '320m²' },
+
+    // ─── Networking & Lounge Areas ──────────────────────────────
+    { zoneId: 'lounge-dev', name: 'Developer Lounge', type: 'restroom' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.0025, lng: VENUE_CENTER.lng + 0.003 }, capacity: 250, detailedLocation: 'East Mezzanine, Level 1', roomArea: '200m²' },
+    { zoneId: 'lounge-net', name: 'Networking Hub', type: 'restroom' as ZoneType, center: { lat: VENUE_CENTER.lat - 0.0025, lng: VENUE_CENTER.lng + 0.003 }, capacity: 300, detailedLocation: 'South Atrium', roomArea: '280m²' },
+
+    // ─── Food & Beverage ────────────────────────────────────────
+    { zoneId: 'food-main', name: 'Main Food Court', type: 'food' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.003, lng: VENUE_CENTER.lng + 0.002 }, capacity: 600, detailedLocation: 'North Wing, Level 1', roomArea: '450m²' },
+    { zoneId: 'food-cafe', name: 'Sponsor Café', type: 'food' as ZoneType, center: { lat: VENUE_CENTER.lat - 0.003, lng: VENUE_CENTER.lng - 0.002 }, capacity: 300, detailedLocation: 'South Wing, Ground Floor', roomArea: '180m²' },
+    { zoneId: 'food-snack', name: 'Quick Bites Station', type: 'food' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.001, lng: VENUE_CENTER.lng + 0.004 }, capacity: 200, detailedLocation: 'East Corridor', roomArea: '80m²' },
+
+    // ─── Emergency Exits ────────────────────────────────────────
+    { zoneId: 'exit-ne', name: 'Emergency Exit NE', type: 'exit' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.0035, lng: VENUE_CENTER.lng + 0.004 }, capacity: 1000, detailedLocation: 'NE Stairwell' },
+    { zoneId: 'exit-se', name: 'Emergency Exit SE', type: 'exit' as ZoneType, center: { lat: VENUE_CENTER.lat - 0.0035, lng: VENUE_CENTER.lng + 0.004 }, capacity: 1000, detailedLocation: 'SE Fire Escape' },
+    { zoneId: 'exit-sw', name: 'Emergency Exit SW', type: 'exit' as ZoneType, center: { lat: VENUE_CENTER.lat - 0.0035, lng: VENUE_CENTER.lng - 0.004 }, capacity: 1200, detailedLocation: 'SW Loading Bay' },
+    { zoneId: 'exit-nw', name: 'Emergency Exit NW', type: 'exit' as ZoneType, center: { lat: VENUE_CENTER.lat + 0.0035, lng: VENUE_CENTER.lng - 0.004 }, capacity: 1100, detailedLocation: 'NW Service Corridor' },
   ];
 
   const zones: ZoneData[] = zoneDefinitions.map((z) => ({
@@ -63,10 +69,12 @@ export function createVenueConfig(): VenueConfig {
     polygon: makePolygon(z.center, r),
     currentOccupancy: Math.floor(z.capacity * 0.1),
     isOpen: true,
+    roomArea: z.roomArea || undefined,
+    detailedLocation: z.detailedLocation || undefined,
     timestamp: Date.now(),
   }));
 
-  return { name: 'SmartVenue Exhibition Hall', center: VENUE_CENTER, zoom: 15, zones };
+  return { name: 'PromptWars International Exhibition Hall', center: VENUE_CENTER, zoom: 15, zones };
 }
 
 // ── Create Initial Queue States ─────────────────────────────────────
@@ -91,12 +99,12 @@ let tickCount = 0;
 
 function simulateDensityChange(zone: ZoneData): ZoneData {
   const t = tickCount * 0.15;
-  // Sinusoidal base pattern with zone-specific phase offset
   const phaseOffset = zone.zoneId.charCodeAt(zone.zoneId.length - 1) * 0.7;
   const sineComponent = Math.sin(t + phaseOffset) * 15;
   const noise = (Math.random() - 0.5) * 10;
-  // Event-driven spikes for realism
-  const eventSpike = Math.random() > 0.95 ? Math.random() * 25 : 0;
+  // Keynote surge: stages spike harder during "talk" cycles
+  const isStage = zone.zoneId.startsWith('stage');
+  const eventSpike = Math.random() > (isStage ? 0.90 : 0.95) ? Math.random() * (isStage ? 35 : 25) : 0;
 
   let newDensity = zone.densityScore + sineComponent * 0.1 + noise * 0.3 + eventSpike;
   newDensity = Math.max(5, Math.min(98, newDensity));

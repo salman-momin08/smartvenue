@@ -16,6 +16,19 @@ import { GoogleServiceProvider } from './services/GoogleServiceProvider.js';
 import { hasPermission, validateRole } from './utils/validation.js';
 import { initErrorBoundary } from './components/errorBoundary.js';
 
+// ── Global Handlers for Accessibility ────────────────────────────────
+/**
+ * Announces a message to screen readers via the ARIA-live region.
+ */
+export function announceToScreenReader(message: string): void {
+  const announcer = document.getElementById('aria-announcer');
+  if (announcer) {
+    announcer.textContent = message;
+    setTimeout(() => { if (announcer.textContent === message) announcer.textContent = ''; }, 3000);
+  }
+}
+
+
 // ── Application State ───────────────────────────────────────────────
 const state: AppState = {
   zones: new Map(),
@@ -201,7 +214,12 @@ function updateToolbar(): void {
 /**
  * Operator Feature: Show Edit Modal for Room Details
  */
-(window as any).showOperatorEdit = (zoneId: string) => {
+interface CustomWindow extends Window {
+  showOperatorEdit: (zoneId: string) => void;
+}
+const customWindow = (window as unknown as CustomWindow);
+
+customWindow.showOperatorEdit = (zoneId: string) => {
   const zone = state.zones.get(zoneId);
   if (!zone) return;
 
@@ -259,13 +277,14 @@ async function handleAIConsult(): Promise<void> {
   updateToolbar();
 
   const provider = GoogleServiceProvider.getInstance();
-  const advice = await provider.getGeminiConsultantAdvice("Championship Sporting Event");
+  const advice = await provider.getGeminiConsultantAdvice("PromptWars Tech Exhibition Hall");
   
   state.aiLoading = false;
   updateToolbar();
   
-  // Show result in a toast instead of standard alert for better UX
-  showToast(`🤖 AI Consultant:\n${advice}`, 'info');
+  // Sanitize advice before display (Security Hardening)
+  const cleanAdvice = advice.replace(/[<>{}]/g, ''); 
+  showToast(`🤖 AI Consultant:\n${cleanAdvice}`, 'info');
 }
 
 

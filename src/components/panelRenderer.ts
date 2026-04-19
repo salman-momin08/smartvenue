@@ -82,18 +82,18 @@ export function renderRecommendationsPanel(
       decision.emergencyExits.alternatives);
   }
 
-  // Gate recommendation
-  html += renderRecommendationCard('🚪', 'Best Entry Gate', decision.recommendedGate.recommendedGate,
+  // Registration/Entry recommendation
+  html += renderRecommendationCard('🎫', 'Best Registration Desk', decision.recommendedGate.recommendedGate,
     decision.recommendedGate.reason, decision.recommendedGate.score,
     decision.recommendedGate.alternatives);
 
-  // Restroom recommendation
-  html += renderRecommendationCard('🚻', 'Nearest Restroom', decision.recommendedRestroom.recommendedGate,
+  // Lounge recommendation
+  html += renderRecommendationCard('💬', 'Nearest Lounge', decision.recommendedRestroom.recommendedGate,
     decision.recommendedRestroom.reason, decision.recommendedRestroom.score,
     decision.recommendedRestroom.alternatives);
 
-  // Food recommendation
-  html += renderRecommendationCard('🍔', 'Food Stall', decision.recommendedFood.recommendedGate,
+  // Food & Beverage recommendation
+  html += renderRecommendationCard('☕', 'Food & Beverage', decision.recommendedFood.recommendedGate,
     decision.recommendedFood.reason, decision.recommendedFood.score,
     decision.recommendedFood.alternatives);
 
@@ -116,7 +116,7 @@ export function renderRecommendationsPanel(
 function renderQueueCard(queue: QueueState, prediction: QueuePrediction | undefined): string {
   const trendIcon = prediction ? (prediction.trend === 'increasing' ? '📈' : prediction.trend === 'decreasing' ? '📉' : '➡️') : '➡️';
   const waitClass = queue.estimatedWaitMinutes > 10 ? 'wait-high' : queue.estimatedWaitMinutes > 5 ? 'wait-medium' : 'wait-low';
-  const typeIcon = queue.zoneType === 'gate' ? '🚪' : queue.zoneType === 'restroom' ? '🚻' : '🍔';
+  const typeIcon = queue.zoneType === 'gate' ? '🎫' : queue.zoneType === 'restroom' ? '💬' : '☕';
 
   let html = `<div class="queue-card" role="region" aria-label="Queue for ${queue.zoneName}">
     <div class="queue-header">
@@ -190,7 +190,10 @@ export function renderQueuePanel(
   <div class="queue-list" role="list" aria-label="Queue status list">`;
 
   for (const queue of sorted) {
+    const queueId = `queue-card-${queue.zoneId}`;
+    html += `<div id="${queueId}" role="listitem">`;
     html += renderQueueCard(queue, predictions.get(queue.zoneId));
+    html += `</div>`;
   }
 
   html += `</div>`;
@@ -249,9 +252,9 @@ export function renderToolbar(
     <div class="toolbar-left">
       <div class="toolbar-brand">
         <img src="/logo.png" alt="SmartVenue Official Logo" width="24" height="24" style="border-radius:4px;" onerror="this.style.display='none'">
-        <span class="brand-icon" aria-hidden="true">🏟️</span>
+        <span class="brand-icon" aria-hidden="true">🏢</span>
         <span class="brand-name">SmartVenue</span>
-        <span class="brand-tag">Assistant</span>
+        <span class="brand-tag">PromptWars</span>
       </div>
     </div>
     <div class="toolbar-right">

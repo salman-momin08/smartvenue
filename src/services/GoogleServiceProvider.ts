@@ -92,12 +92,21 @@ export class GoogleServiceProvider {
 
     try {
       let model = this.getModel(this.PRIMARY_MODEL);
-      const prompt = `Professional Event Manager: Provide 2 paragraphs of layout/security/catering advice for a ${context} in an exhibition hall.`;
+      const prompt = `You are a Senior Exhibition Floor Manager at PromptWars, a large-scale international tech hackathon and expo with 5,000+ attendees. The venue is a multi-hall exhibition center with booth zones (AI/ML, Cloud, DevTools, Startups), a Main Keynote Stage, Workshop Theater, Developer Lounge, Networking Hub, food courts, and multiple registration points.
+
+Given the current venue context: "${context}"
+
+Provide 2 concise paragraphs of actionable advice covering:
+1. Crowd flow optimization between booth zones and stages (preventing bottlenecks during keynote transitions)
+2. Safety, staffing, and catering recommendations specific to a tech exhibition environment
+
+Be specific with zone names and use data-driven language.`;
 
       try {
         const result = await model!.generateContent(prompt);
         return (await result.response).text();
-      } catch (e: any) {
+      } catch (err: unknown) {
+        const e = err as Error;
         if (e.message?.includes('404') || e.message?.includes('not found')) {
           console.warn(`[Gemini] ${this.PRIMARY_MODEL} not found. Falling back to ${this.FALLBACK_MODEL}`);
           model = this.getModel(this.FALLBACK_MODEL);
@@ -106,7 +115,7 @@ export class GoogleServiceProvider {
         }
         throw e;
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('[GoogleServiceProvider] Gemini Error:', err);
       return "AI Consultant experienced a connectivity error.";
     }
@@ -116,12 +125,13 @@ export class GoogleServiceProvider {
     if (!this.genAI) return "[]";
     try {
       const model = this.getModel(this.PRIMARY_MODEL);
-      const prompt = `Identify exactly 2 zones with severe surges in 10 mins. Output JSON array: {zoneId, reason, severity}. Data: ${JSON.stringify(Array.from(queues.values()).map(q => ({ id: q.zoneId, history: q.history })))}`;
+      const prompt = `You are the AI operations engine for PromptWars, a major tech exhibition. Analyze these queue metrics from registration desks, booth zones, food courts, and lounges. Identify exactly 2 zones likely to experience severe crowd surges in the next 10 minutes. Output ONLY a JSON array: [{"zoneId": "...", "reason": "...", "severity": "HIGH|CRITICAL"}]. Data: ${JSON.stringify(Array.from(queues.values()).map(q => ({ id: q.zoneId, name: q.zoneName, history: q.history })))}`;
 
       try {
         const result = await model!.generateContent(prompt);
         return (await result.response).text().replace(/```json\n|\n```|```/g, '').trim();
-      } catch (e: any) {
+      } catch (err: unknown) {
+        const e = err as Error;
         if (e.message?.includes('404')) {
           const fallback = this.getModel(this.FALLBACK_MODEL);
           const result = await fallback!.generateContent(prompt);
@@ -129,21 +139,22 @@ export class GoogleServiceProvider {
         }
         throw e;
       }
-    } catch (err) {
+    } catch (err: unknown) {
       return "[]";
     }
   }
 
-  public async getVenueOperationalAudit(venueState: any): Promise<any> {
+  public async getVenueOperationalAudit(venueState: unknown): Promise<any> {
     if (!this.genAI) return null;
     try {
       const model = this.getModel(this.PRIMARY_MODEL);
-      const prompt = `Audit these zones: ${JSON.stringify(venueState)}. Return ONLY raw JSON: {efficiencyRating, bottleneckZone, staffingReallocation, safetyRiskLevel}`;
+      const prompt = `You are auditing the PromptWars International Exhibition Hall. Analyze zone occupancy, booth traffic, stage capacity, and food court throughput. Return ONLY raw JSON: {"efficiencyRating": 0-100, "bottleneckZone": "zone name", "staffingReallocation": "recommendation", "safetyRiskLevel": "LOW|MEDIUM|HIGH"}. Venue data: ${JSON.stringify(venueState)}`;
 
       try {
         const result = await model!.generateContent(prompt);
         return JSON.parse((await result.response).text().replace(/```json\n|\n```|```/g, '').trim());
-      } catch (e: any) {
+      } catch (err: unknown) {
+        const e = err as Error;
         if (e.message?.includes('404')) {
           const fallback = this.getModel(this.FALLBACK_MODEL);
           const result = await fallback!.generateContent(prompt);
@@ -151,7 +162,7 @@ export class GoogleServiceProvider {
         }
         throw e;
       }
-    } catch (err) {
+    } catch (err: unknown) {
       return null;
     }
   }
