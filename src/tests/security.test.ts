@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeString, validateNumber, validateRole } from './validation.js';
+import { sanitizeString, validateNumber, validateRole } from '../utils/validation.js';
 
 describe('SmartVenue Security Audit', () => {
   it('should sanitize dangerous HTML characters', () => {

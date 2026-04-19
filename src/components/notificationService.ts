@@ -4,6 +4,8 @@
  * push notifications for critical venue alerts (emergencies, closures, spikes).
  */
 
+import { Incident } from '../types.js';
+
 let permissionGranted = false;
 const notifiedIncidents = new Set<string>();
 

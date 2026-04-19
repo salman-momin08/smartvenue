@@ -1,14 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { predictQueue, computeEMA, determineTrend } from './queuePredictor.js';
-import { monitorIncidents, shouldActivateEmergency } from './incidentMonitor.js';
+import { predictQueue, _testing as qTesting } from '../utils/queuePredictor.js';
+import { monitorIncidents, shouldActivateEmergency } from '../utils/incidentMonitor.js';
 import { ZoneData, QueueState, Incident } from '../types.js';
+
+const { computeEMA } = qTesting;
 
 describe('SmartVenue Intelligence Audit', () => {
   
   describe('Queue Predictor', () => {
     it('should compute correct EMA', () => {
       const data = [10, 20, 30];
-      const ema = computeEMA(data);
+      const ema = computeEMA(data, 0.3);
       expect(ema).toBeGreaterThan(10);
       expect(ema).toBeLessThan(30);
     });
@@ -31,8 +33,8 @@ describe('SmartVenue Intelligence Audit', () => {
       } as ZoneData);
       
       const incidents = monitorIncidents(zones, []);
-      expect(incidents.some(i => i.type === 'zone_closure')).toBe(true);
-      expect(incidents.find(i => i.type === 'zone_closure')?.severity).toBe('high');
+      expect(incidents.some((i: Incident) => i.type === 'zone_closure')).toBe(true);
+      expect(incidents.find((i: Incident) => i.type === 'zone_closure')?.severity).toBe('high');
     });
 
     it('should recognize emergency state', () => {

@@ -58,10 +58,19 @@ describe('SmartVenue Decision Engine', () => {
     });
   });
 
-  describe('Queue Prediction', () => {
-    it('calculates correct velocity and trend', () => {
-      expect(computeVelocity([10, 12, 14, 16])).toBe(2);
-      expect(determineTrend(2)).toBe('increasing');
+  describe('Core Decision Logic', () => {
+    it('integrates multiple factors into a final decision', () => {
+      const zones = new Map<string, ZoneData>();
+      zones.set('gate-a', makeZone({ zoneId: 'gate-a', densityScore: 10 }));
+      
+      const queues = new Map<string, QueueState>();
+      queues.set('gate-a', makeQueue({ zoneId: 'gate-a', queueLength: 2 }));
+
+      const decision = computeDecision(zones, queues, [], { lat: 40.45, lng: -3.69 }, false);
+      
+      expect(decision).toBeDefined();
+      expect(decision.recommendedGate.recommendedZoneId).toBe('gate-a');
+      expect(decision.emergencyMode).toBe(false);
     });
   });
 });
